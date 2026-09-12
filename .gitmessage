@@ -1,0 +1,15 @@
+
+# <type>(<scope>): <변경 요약>
+# 예: feat(auth): 초기 비밀번호 변경 API 추가
+# 예: fix(scope): 권한 회수 후 응답 노출 차단
+# 예: docs(spec): 단독 PR 결과 계약 정리
+#
+# type: feat, fix, docs, refactor, test, chore, build, ci, perf, style, revert
+# scope는 선택. 예: auth, scope, sync, search, ai, ui, docs
+# 제목은 짧게, 한국어 사용 가능. style은 기능 변화 없는 서식 변경.
+#
+# 필요할 때 빈 줄 뒤에 변경 이유와 주의점을 적는다.
+# 이슈 참고: Refs: #123
+# Jira 참고: Refs: PAY-123
+# 호환성 깨짐: 제목에 ! 표시하고 아래 footer에 변경·이행 방법 작성.
+# BREAKING CHANGE: <내용>

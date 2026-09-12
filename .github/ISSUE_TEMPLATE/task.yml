@@ -1,0 +1,23 @@
+name: "개발 작업"
+description: "문서·리팩터링·테스트·설정 작업을 기록합니다."
+title: "[Task] "
+body:
+  - type: textarea
+    id: purpose
+    attributes:
+      label: "목적과 작업 범위"
+      description: "왜 필요한지와 변경할 범위를 적어 주세요."
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: "완료 조건과 확인 방법"
+      placeholder: "- [ ] 문서 간 API 필드가 일치한다.\n- [ ] 예시 JSON을 파싱해 확인한다."
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: "관련 자료"
+      description: "선택: 명세·ADR 경로, 이슈·PR, Jira 키."

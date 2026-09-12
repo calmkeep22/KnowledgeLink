@@ -1,0 +1,36 @@
+name: "버그 신고"
+description: "재현 방법과 기대·실제 동작으로 문제를 기록합니다."
+title: "[Bug] "
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "재현 방법"
+      description: "입력, 계정 역할·scope 조건, 실행 순서를 적어 주세요."
+      placeholder: "1. 일부 scope 권한의 MEMBER로 로그인\n2. ... 요청\n3. ... 확인"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "기대 동작"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: "실제 동작"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: "실행 환경"
+      description: "커밋·브랜치, 실행 프로파일, OS·JDK·브라우저 등 재현에 필요한 정보."
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "로그·화면·관련 테스트"
+      description: "선택: requestId, 실패한 T 번호, 화면 또는 로그. 비밀번호·토큰·세션과 실제 조직 원문은 제거해 주세요."

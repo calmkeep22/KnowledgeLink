@@ -1,0 +1,14 @@
+# 운영: 모든 접속 정보는 환경 변수로 주입한다. Nginx 뒤에서 HTTPS로만 제공한다.
+spring:
+  datasource:
+    url: ${KL_DB_URL}
+    username: ${KL_DB_USERNAME}
+    password: ${KL_DB_PASSWORD}
+
+server:
+  forward-headers-strategy: native
+  servlet:
+    session:
+      cookie:
+        name: __Host-SESSION
+        secure: true

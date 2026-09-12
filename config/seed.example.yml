@@ -1,0 +1,13 @@
+# config/seed.yml로 복사해서 사용한다. config/seed.yml은 git에 올리지 않는다.
+# 비밀번호는 파일에 쓰지 않고, 비밀번호를 담은 환경 변수 이름만 적는다.
+# 등록된 계정은 첫 로그인 후 비밀번호를 바꿔야 한다.
+kl:
+  seed:
+    workspace-name: Demo Org
+    accounts:
+      - login-id: admin
+        role: ADMIN
+        initial-password-env: KL_SEED_ADMIN_PASSWORD
+      - login-id: dev.kim
+        role: MEMBER
+        initial-password-env: KL_SEED_MEMBER_PASSWORD

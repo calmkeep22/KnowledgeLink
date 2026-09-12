@@ -1,0 +1,20 @@
+# 로컬 개발용 DB. 운영 배포 구성은 별도 파일로 둔다.
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: knowledge_link
+      POSTGRES_USER: kl
+      POSTGRES_PASSWORD: ${KL_DB_PASSWORD:-kl-local-only}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - kl-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kl -d knowledge_link"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  kl-pgdata:

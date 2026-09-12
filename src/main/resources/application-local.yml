@@ -1,0 +1,6 @@
+# 로컬 개발: compose.yaml의 PostgreSQL(pgvector)을 사용한다.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/knowledge_link
+    username: kl
+    password: ${KL_DB_PASSWORD:kl-local-only}

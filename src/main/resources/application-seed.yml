@@ -1,0 +1,4 @@
+# 계정 등록 후 바로 종료하도록 웹 서버를 띄우지 않는다.
+spring:
+  main:
+    web-application-type: none

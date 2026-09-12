@@ -1,0 +1,32 @@
+name: "기능 요청"
+description: "해결할 문제와 MVP 완료 조건을 정합니다."
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: "해결할 문제"
+      description: "누가 어떤 상황에서 무엇을 하기 어려운지 적어 주세요."
+      placeholder: "MEMBER가 접근 가능한 프로젝트를 확인할 수 없다."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "제안 동작과 범위"
+      description: "사용자에게 제공할 동작과 이번 작업에서 제외할 범위를 적어 주세요."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "완료 조건"
+      description: "확인 가능한 결과를 체크리스트로 적어 주세요."
+      placeholder: "- [ ] grant가 있는 scope만 반환한다."
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: "관련 명세·의존 작업"
+      description: "선택: F/T 번호, 명세 경로, GitHub 이슈 또는 Jira 키."
