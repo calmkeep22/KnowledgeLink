@@ -8,7 +8,7 @@
 
 ## 문서 목록
 
-현재 구현의 기준은 이 디렉터리의 명세다. 기술 스택은 Spring Boot + React·TypeScript + PostgreSQL·pgvector·pg_trgm이며, [이전 영상 인수인계 기획](../archive/video-handover-tech-stack.md)은 보관용이다.
+현재 구현의 기준은 이 디렉터리의 명세다. 기술 스택은 Spring Boot + React·TypeScript + PostgreSQL·pgvector·pg_trgm이다.
 
 2026-09-12 반영 결정: 생성물의 근거 접근이 바뀌면 전체 비공개, SYNC/INDEX/AI 공통 실행 슬롯, Jira 연결+불변 ID 식별, WORK_ITEM/CODE_CHANGE 공통 결과 계약. 세부 규칙은 아래 문서를 따른다.
 

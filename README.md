@@ -45,5 +45,3 @@ docker compose up -d
 
 - 명세의 API·AI 계약과 수용 테스트 중 위 표에 없는 항목은 아직 구현·실행되지 않았다.
 - 로그인 시도 제한은 아직 없다. 공개 배포 전에 추가한다.
-
-이전 영상 인수인계 기획은 [보관 문서](docs/archive/video-handover-tech-stack.md)에 남겼으며 현재 구현에 적용하지 않는다.
