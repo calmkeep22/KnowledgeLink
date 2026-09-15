@@ -7,11 +7,11 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 실행일 | 2026-09-12 |
-| 코드 버전 | 첫 커밋 전 작업 트리(커밋 후 해시로 바꾼다) |
+| 실행일 | 2026-09-15 |
+| 코드 버전 | `0a3fad5` 위 2단계 변경(이 기록을 담은 커밋) |
 | 환경 | Windows 11, JDK 21.0.5, Gradle 9.7.1, Spring Boot 4.1.1, Docker 29.3.0, Testcontainers 2.0.5, PostgreSQL 17.11(`pgvector/pgvector:pg17`) |
-| 단위 테스트 `./gradlew test` | 33건 통과, 실패 0 |
-| 통합 테스트 `./gradlew integrationTest` | 19건 통과, 실패 0(8분 47초) |
+| 단위 테스트 `./gradlew test` | 63건 통과, 실패 0 |
+| 통합 테스트 `./gradlew integrationTest` | 35건 통과, 실패 0(약 5분, 첫 컨테이너 기동 포함) |
 | 벤치마크 `./gradlew benchmark` | 수동 실행, [UUID PK 벤치마크 기록](../benchmarks/uuid-primary-key.md) |
 | 외부 호출·비용 | 없음(Jira·GitHub·AI 호출 없음) |
 
@@ -22,7 +22,9 @@
 | 테스트 ID | 상태 | 담당 테스트 |
 | --- | --- | --- |
 | T01 | PASS | `AuthIntegrationTest`(11건). 보조: `LoginServiceTest`, `PasswordPolicyTest`, `LoginIdsTest` |
-| T02~T34 | 미실행 | 해당 기능 미구현(2단계 이후) |
+| T02 | 일부 | scope 수준만 검증: `ScopeAccessIntegrationTest`(비허용 scope·다른 조직 scope는 없는 자료와 같은 404). work item·code change·analysis·question·job ID는 해당 기능 미구현 |
+| T10 | 일부 | 같은 Jira 사이트 중복 연결 거절만 검증: `SourceSchemaConstraintsIntegrationTest`. 프로젝트 간 이동은 동기화 미구현 |
+| T03~T09, T11~T34 | 미실행 | 해당 기능 미구현(3단계 이후) |
 
 ## 3. T01 결과 기록
 
@@ -59,18 +61,28 @@ PASS 또는 FAIL 또는 미실행: PASS
 | 계정 등록 스크립트 | `AccountProvisioningIntegrationTest` 2건 | PASS. 재실행해도 결과 같음, 정책 위반 거절(메시지에 비밀번호 없음) |
 | 입력 규칙 | `LoginIdsTest` 14건, `PasswordPolicyTest` 6건 | PASS |
 | 로그인 서비스 | `LoginServiceTest` 5건 | PASS. 없는 계정도 해시 비교 수행, 인코더 한도 초과 입력도 같은 오류 |
+| scope 접근 판단 | `ScopeAccessPolicyTest` 6건 | PASS. 볼 수 없는 scope는 403이 아니라 404, 범위를 고르지 않으면 볼 수 있는 전체, 볼 수 없는 scope가 섞이면 404, 하나도 없으면 422, 같은 요청 안에서는 한 번만 조회 |
+| `GET /scopes` | `ScopeAccessIntegrationTest` 8건 | PASS. ADMIN은 켜진 scope 전부·MEMBER는 grant받은 것만, grant 없으면 빈 목록, 로그인 중 grant 회수·scope 끄기가 다음 요청에 반영, 응답에 인증 정보·URL 없음, 다른 조직·grant 없는 scope는 404 |
+| 조직 경계 DB 제약 | `SourceSchemaConstraintsIntegrationTest` 5건 | PASS. 다른 조직 연결의 scope, 다른 조직 계정의 grant, 중복 grant, 같은 Jira 사이트 중복 연결, 토큰처럼 보이는 `credential_ref`와 site_id 있는 GitHub 연결을 DB가 거절 |
+| 운영 스크립트(연결·scope·grant) | `SeedRunnerIntegrationTest` 3건 | PASS. 두 번 실행해도 한 번만 생성, ADMIN grant 거절, 형식이 틀리거나 없는 scope 참조 거절(메시지로 원인 확인) |
+| 연결·scope 입력 규칙 | `SourceConnectionTest` 16건, `SourceScopeTest` 8건 | PASS. `credential_ref`·base URL 오류 메시지에 입력값 없음, Jira는 site_id 필수·GitHub는 금지, 표시 키 형식 |
 
 ## 5. 알려진 공백
 
 - 로그인 시도 제한이 없다. 공개 배포 전에 추가한다.
 - 비밀번호 변경·로그아웃 요청의 CSRF 누락 거절은 개별 테스트가 없다. 같은 CSRF 필터를 로그인 요청으로 대표 검증했다.
-- 로그·오류 응답에 비밀값이 남지 않는지(T29)는 아직 자동으로 검사하지 않는다.
+- 로그·오류 응답에 비밀값이 남지 않는지(T29)는 아직 자동으로 검사하지 않는다. 연결의 `credential_ref`·base URL 검증 오류가 입력값을 메시지에 싣지 않는 것만 단위 테스트로 확인했다.
+- scope를 켜고 끄거나 grant를 주고 회수하는 관리 API는 아직 없다. 지금은 운영 스크립트(추가만)와 DB 직접 수정으로만 바꾼다.
 - 벤치마크 시간 지표는 Windows + Docker Desktop 환경의 실행 간 편차가 커서 확정 수치가 아니다.
 
 ## 6. 실행 이력
 
 | 날짜 | 범위 | 결과 | 비고 |
 | --- | --- | --- | --- |
+| 2026-09-15 | 단위 63 / 통합 35 | 전부 통과 | 2단계(scope·grant, `GET /scopes`) 최종 |
+| 2026-09-14 | 통합 3(`SeedRunnerIntegrationTest`) | 전부 통과 | 테스트 ADMIN 비밀번호 수정, 형식 오류 테스트에 메시지 검증 추가 |
+| 2026-09-14 | 통합 35 | 33 통과, 2 실패 | 테스트 ADMIN 초기 비밀번호에 아이디가 들어가 계정 등록에서 먼저 실패. 같은 클래스의 형식 오류 테스트는 이 예외로 잘못 통과하던 상태 |
+| 2026-09-14 | 통합 35 | 미실행 | Docker 데몬 없음 |
 | 2026-09-12 | 단위 33 / 통합 19 | 전부 통과 | 단조 증가 UUIDv7, 생성자 ID 발급 반영 후 |
 | 2026-09-12 | 벤치마크 2차 | 완료 | 단조 증가 UUIDv7 |
 | 2026-09-12 | 벤치마크 1차 | 완료 | 같은 밀리초 안 무작위 UUIDv7. 채움률 문제 발견 |

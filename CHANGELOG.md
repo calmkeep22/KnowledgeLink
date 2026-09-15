@@ -19,6 +19,11 @@
 - 테스트용 `MutableClock`과 생성 시각 기록 검증 통합 테스트: 주입한 `Clock`의 시각이 DB `created_at`에 기록되고, 수정해도 유지되며, JVM 시간대가 달라도 같은 순간으로 저장된다.
 - UUIDv4·UUIDv7 PK 벤치마크(`./gradlew benchmark`, 기록: `docs/benchmarks/uuid-primary-key.md`).
 - 테스트 결과 기록(`docs/testing/test-report.md`): 명세 T01 PASS 기록과 설계 검증 결과, 알려진 공백.
+- scope·grant 접근 모델(V4): `source_connection`·`source_scope`·`scope_grant`. scope는 같은 조직의 연결에만, grant는 같은 조직의 계정·scope 사이에만 만들 수 있도록 `(id, workspace_id)` 복합 FK로 DB가 보장한다.
+- `GET /scopes`: ADMIN은 조직의 켜진 scope 전부, MEMBER는 grant받은 켜진 scope만 본다. 응답에 연결의 인증 정보·URL은 없다.
+- scope 접근 판단(`ScopeAccessPolicy`): 권한 밖 scope는 없는 자료와 같은 404, 볼 수 있는 scope가 하나도 없으면 422 `NO_ACCESSIBLE_SCOPE`.
+  - 볼 수 있는 scope는 요청 안에서만 한 번 계산해 두므로 grant 회수·scope 끄기가 다음 요청에 바로 반영된다.
+- 운영 스크립트가 연결·scope·grant도 등록한다(`connections`, `grants`). 재실행해도 결과가 같고 삭제는 하지 않으며, ADMIN에 대한 grant는 설정 오류로 거절한다.
 
 ### Changed
 - `UuidV7`이 한 JVM 안에서 단조 증가한다(RFC 9562 6.2 Method 2). 같은 밀리초 안에서는 무작위 양수를 더한다.
@@ -30,7 +35,9 @@
 ### Security
 - 없는 계정·틀린 비밀번호·비활성 계정을 같은 응답으로 처리하고, 없는 계정도 해시 비교를 수행해 응답 시간 차이를 줄였다.
 - BCrypt 72바이트 한도를 넘는 비밀번호는 설정 단계에서 거절하고 로그인에서도 예외 없이 실패 처리한다.
+- 연결의 `credential_ref`는 환경 변수 이름 형식만 받는다(애플리케이션 검증과 DB CHECK 둘 다). 토큰 값을 잘못 넣으면 거절하고, 오류 메시지에 그 값을 싣지 않는다.
 
 ### Notes
 - 명세 대비 차이: `login_id`는 조직 내 unique보다 강한 전역 unique로 두었다(단일 조직 MVP).
-- 오류 코드 `INVALID_CREDENTIALS`, `PASSWORD_CHANGE_REQUIRED`, `METHOD_NOT_ALLOWED`, `UNSUPPORTED_MEDIA_TYPE`, `INTERNAL_ERROR`를 추가했다.
+- 오류 코드 `INVALID_CREDENTIALS`, `PASSWORD_CHANGE_REQUIRED`, `METHOD_NOT_ALLOWED`, `UNSUPPORTED_MEDIA_TYPE`, `INTERNAL_ERROR`, `NO_ACCESSIBLE_SCOPE`를 추가했다.
+- 명세 대비 차이: `source_connection.name`(조직 안 unique)을 추가했다. 운영 스크립트의 grant가 `연결이름:표시키`로 scope를 가리키는 데 쓴다. `source_scope.sync_cursor`, `last_reconciled_at`은 동기화 단계에서 추가한다.

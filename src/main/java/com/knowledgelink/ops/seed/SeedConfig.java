@@ -1,6 +1,8 @@
 package com.knowledgelink.ops.seed;
 
+import com.knowledgelink.access.application.GrantProvisioningService;
 import com.knowledgelink.account.application.AccountProvisioningService;
+import com.knowledgelink.source.application.SourceProvisioningService;
 import com.knowledgelink.workspace.domain.WorkspaceRepository;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -16,8 +18,11 @@ public class SeedConfig {
     @Bean
     SeedRunner seedRunner(SeedProperties seed,
                           WorkspaceRepository workspaceRepository,
-                          AccountProvisioningService provisioningService,
+                          AccountProvisioningService accountProvisioning,
+                          SourceProvisioningService sourceProvisioning,
+                          GrantProvisioningService grantProvisioning,
                           Environment environment) {
-        return new SeedRunner(seed, workspaceRepository, provisioningService, environment);
+        return new SeedRunner(seed, workspaceRepository, accountProvisioning, sourceProvisioning,
+                grantProvisioning, environment);
     }
 }
