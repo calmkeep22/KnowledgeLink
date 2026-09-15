@@ -125,8 +125,7 @@ class AuthIntegrationTest {
 
             assertThat(current.sessionCookieValue()).isNotEqualTo(beforeChange);
             current.get("/api/v1/auth/me").andExpect(jsonPath("$.mustChangePassword").value(false));
-            // 보안 필터를 통과해 라우팅 단계까지 온다(아직 없는 API라 404).
-            current.get("/api/v1/scopes").andExpect(status().isNotFound());
+            current.get("/api/v1/scopes").andExpect(status().isOk());
             other.get("/api/v1/auth/me")
                     .andExpect(status().isUnauthorized())
                     .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
