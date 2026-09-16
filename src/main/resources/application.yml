@@ -42,6 +42,16 @@ management:
       probes:
         enabled: true
 
+kl:
+  jobs:
+    # 명세 제안값(03 5장, 05 7장). 코드 기본값과 같다.
+    lease: 120s
+    heartbeat: 30s
+    poll-interval: 2s
+    max-attempts: 3
+    retry-base: 30s
+    retry-max: 300s
+
 logging:
   pattern:
     level: "%5p [%X{requestId:-}]"

@@ -8,10 +8,10 @@
 | 항목 | 내용 |
 | --- | --- |
 | 실행일 | 2026-09-15 |
-| 코드 버전 | `0a3fad5` 위 2단계 변경(이 기록을 담은 커밋) |
+| 코드 버전 | `17f5842`(2단계) 위 3단계 변경(`feat/job-engine`, 이 기록을 담은 커밋) |
 | 환경 | Windows 11, JDK 21.0.5, Gradle 9.7.1, Spring Boot 4.1.1, Docker 29.3.0, Testcontainers 2.0.5, PostgreSQL 17.11(`pgvector/pgvector:pg17`) |
-| 단위 테스트 `./gradlew test` | 63건 통과, 실패 0 |
-| 통합 테스트 `./gradlew integrationTest` | 35건 통과, 실패 0(약 5분, 첫 컨테이너 기동 포함) |
+| 단위 테스트 `./gradlew test` | 75건 통과, 실패 0 |
+| 통합 테스트 `./gradlew integrationTest` | 57건 통과, 실패 0(약 4분 30초, 첫 컨테이너 기동 포함) |
 | 벤치마크 `./gradlew benchmark` | 수동 실행, [UUID PK 벤치마크 기록](../benchmarks/uuid-primary-key.md) |
 | 외부 호출·비용 | 없음(Jira·GitHub·AI 호출 없음) |
 
@@ -24,9 +24,14 @@
 | T01 | PASS | `AuthIntegrationTest`(11건). 보조: `LoginServiceTest`, `PasswordPolicyTest`, `LoginIdsTest` |
 | T02 | 일부 | scope 수준만 검증: `ScopeAccessIntegrationTest`(비허용 scope·다른 조직 scope는 없는 자료와 같은 404). work item·code change·analysis·question·job ID는 해당 기능 미구현 |
 | T10 | 일부 | 같은 Jira 사이트 중복 연결 거절만 검증: `SourceSchemaConstraintsIntegrationTest`. 프로젝트 간 이동은 동기화 미구현 |
-| T03~T09, T11~T34 | 미실행 | 해당 기능 미구현(3단계 이후) |
+| T24 | PASS | `JobLeaseRecoveryIntegrationTest`(재시작 2건) |
+| T25 | 일부 | `JobLeaseRecoveryIntegrationTest`: 이전 실행기의 heartbeat·결과·커서·완료·슬롯 해제 거절과 새 소유권 유지. SENT/UNKNOWN 자동 재호출 금지는 AI 단계 |
+| T32 | PASS | `JobConcurrencyIntegrationTest`(4건). 작업 handler는 테스트용 |
+| T03~T09, T11~T23, T26~T31, T33, T34 | 미실행 | 해당 기능 미구현(4단계 이후) |
 
-## 3. T01 결과 기록
+## 3. 수용 기준 결과 기록
+
+### T01
 
 ```
 테스트 ID / 날짜 / 코드·설정 버전: T01 / 2026-09-12 / 첫 커밋 전 작업 트리, 기본 설정 + Testcontainers PostgreSQL
@@ -50,6 +55,28 @@ PASS 또는 FAIL 또는 미실행: PASS
 | 관리자 권한 | MEMBER·ADMIN으로 `/admin/**` 호출 | MEMBER 403 `FORBIDDEN`, ADMIN은 보안 필터 통과(API 미구현이라 404) | 일치 |
 | 응답 헤더 | `/auth/me`, 401 응답 | `Cache-Control`에 `no-store`, 헤더와 본문의 requestId 일치 | 일치 |
 
+### T24·T25·T32
+
+```
+테스트 ID / 날짜 / 코드·설정 버전: T24·T25·T32 / 2026-09-15 / feat/job-engine, 기본 kl.jobs 설정(lease 120초·heartbeat 30초·3회) + Testcontainers PostgreSQL, 실행기 자동 실행 끔
+fixture ID / 수행 동작 또는 장애 지점: 조직 1~2개, Jira·GitHub scope, 테스트용 handler, 고정 시계 / 아래 세부 항목
+예상 결과 / 실제 결과 / 외부 호출 수·비용: 세부 항목 표 / 모두 일치 / 0회·0원
+PASS 또는 FAIL 또는 미실행: T24 PASS, T25 일부(SENT/UNKNOWN은 AI 단계), T32 PASS
+증거 위치 / 수정할 점: src/test/java/com/knowledgelink/job, build/reports/tests/integrationTest / 5장 참고
+```
+
+| ID | 수행 동작 | 예상 결과 | 실제 |
+| --- | --- | --- | --- |
+| T24 | QUEUED로 저장한 뒤 메모리 상태가 없는 새 실행기로 한 주기 실행 | 작업 실행, SUCCEEDED, 시도 1 | 일치 |
+| T24 | RUNNING 중 실행기 종료(heartbeat·완료 없음) 후 새 실행기 | lease가 남아 있으면 그대로, 만료 후 RETRY_WAIT(`LEASE_EXPIRED`)·슬롯 반납, 대기 후 다시 실행해 SUCCEEDED·시도 2 | 일치 |
+| T25 | lease 만료 → 복구 → 새 실행기 재선점 후, 이전 실행기가 heartbeat·결과 저장·단계 기록·완료·재시도·실패 요청 | 모두 `LeaseLostException`, 결과 미저장, 작업·슬롯은 새 run_token 유지, 새 실행기는 정상 완료 | 일치 |
+| T25 | handler 실행 중 소유권을 잃은 뒤 성공 결과 반환 | 결과 미저장, 새 소유자 유지 | 일치 |
+| T25 | lease 만료 시각에 heartbeat | 거절, lease 연장 안 됨 | 일치 |
+| T32 | AI 작업 8개(4종×2)를 8개 connection에서 동시에 선점 | RUNNING 1, QUEUED 7, 시도를 쓴 작업 1 | 일치 |
+| T32 | 두 조직·세 scope의 SYNC·RECONCILE을 동시에 선점 | RUNNING 1 | 일치 |
+| T32 | INDEX와 AI를 동시에 선점 | 둘 다 RUNNING | 일치 |
+| T32 | 선점 → 실행기 사망 → 8개 connection에서 동시 복구를 3회 반복 | 매번 복구 1건·슬롯 비워짐, 마지막에 FAILED(`LEASE_EXPIRED`)·시도 3, 점유 슬롯 0 | 일치 |
+
 ## 4. 명세 밖 설계 검증
 
 | 대상 | 테스트 | 결과 |
@@ -66,6 +93,8 @@ PASS 또는 FAIL 또는 미실행: PASS
 | 조직 경계 DB 제약 | `SourceSchemaConstraintsIntegrationTest` 5건 | PASS. 다른 조직 연결의 scope, 다른 조직 계정의 grant, 중복 grant, 같은 Jira 사이트 중복 연결, 토큰처럼 보이는 `credential_ref`와 site_id 있는 GitHub 연결을 DB가 거절 |
 | 운영 스크립트(연결·scope·grant) | `SeedRunnerIntegrationTest` 3건 | PASS. 두 번 실행해도 한 번만 생성, ADMIN grant 거절, 형식이 틀리거나 없는 scope 참조 거절(메시지로 원인 확인) |
 | 연결·scope 입력 규칙 | `SourceConnectionTest` 16건, `SourceScopeTest` 8건 | PASS. `credential_ref`·base URL 오류 메시지에 입력값 없음, Jira는 site_id 필수·GitHub는 금지, 표시 키 형식 |
+| 작업 상태 전환 | `JobEngineIntegrationTest` 11건 | PASS. 입장월 서울 기준, scope당 활성 SYNC 하나, 다른 조직 scope 거절, 선점 시 작업·슬롯에 같은 소유권, 결과와 SUCCEEDED를 함께 저장(결과 저장 실패 시 모두 롤백), backoff 뒤 재실행·3회 소진 시 FAILED, Retry-After 존중, 영구 실패는 바로 FAILED, 슬롯 대기는 시도 미소비, 어긋난 소유 정보는 DB가 거절 |
+| 재시도·실행기 설정 | `RetryPolicyTest` 5건, `JobHandlersTest` 4건, `NewJobTest` 2건, `JobPropertiesTest` 1건 | PASS. backoff 상한·jitter 범위, 종류별 슬롯, handler 중복 거절, heartbeat는 lease보다 짧음 |
 
 ## 5. 알려진 공백
 
@@ -73,12 +102,16 @@ PASS 또는 FAIL 또는 미실행: PASS
 - 비밀번호 변경·로그아웃 요청의 CSRF 누락 거절은 개별 테스트가 없다. 같은 CSRF 필터를 로그인 요청으로 대표 검증했다.
 - 로그·오류 응답에 비밀값이 남지 않는지(T29)는 아직 자동으로 검사하지 않는다. 연결의 `credential_ref`·base URL 검증 오류가 입력값을 메시지에 싣지 않는 것만 단위 테스트로 확인했다.
 - scope를 켜고 끄거나 grant를 주고 회수하는 관리 API는 아직 없다. 지금은 운영 스크립트(추가만)와 DB 직접 수정으로만 바꾼다.
+- 작업 handler가 아직 없어 실행기는 테스트용 handler로만 검증했다. 운영 주기 실행(`start()`)과 실제 시간 간격의 heartbeat는 자동 테스트가 없다.
+- 실행기가 정상 종료할 때도 실행 중이던 작업을 바로 반납하지 않는다. lease가 만료된 뒤(최대 120초) 복구되며 그 실행의 시도 횟수는 소비된다.
+- `/jobs/{jobId}` 조회·재시도 API와 T02의 job ID 404는 아직 없다.
 - 벤치마크 시간 지표는 Windows + Docker Desktop 환경의 실행 간 편차가 커서 확정 수치가 아니다.
 
 ## 6. 실행 이력
 
 | 날짜 | 범위 | 결과 | 비고 |
 | --- | --- | --- | --- |
+| 2026-09-15 | 단위 75 / 통합 57 | 전부 통과 | 3단계(작업 엔진). T24·T32 PASS, T25 일부 |
 | 2026-09-15 | 단위 63 / 통합 35 | 전부 통과 | 2단계(scope·grant, `GET /scopes`) 최종 |
 | 2026-09-14 | 통합 3(`SeedRunnerIntegrationTest`) | 전부 통과 | 테스트 ADMIN 비밀번호 수정, 형식 오류 테스트에 메시지 검증 추가 |
 | 2026-09-14 | 통합 35 | 33 통과, 2 실패 | 테스트 ADMIN 초기 비밀번호에 아이디가 들어가 계정 등록에서 먼저 실패. 같은 클래스의 형식 오류 테스트는 이 예외로 잘못 통과하던 상태 |

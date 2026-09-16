@@ -13,8 +13,10 @@ import org.springframework.context.annotation.Import;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Tag("integration")
-@SpringBootTest(properties =
-        "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.knowledgelink.support.SqlCapture")
+@SpringBootTest(properties = {
+        "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.knowledgelink.support.SqlCapture",
+        // 작업 실행기는 끄고, 테스트가 엔진·실행기를 직접 호출해 시점을 통제한다.
+        "kl.jobs.worker.enabled=false"})
 @AutoConfigureMockMvc
 @Import({PostgresTestcontainersConfig.class, TestClockConfig.class, TestFixtures.class})
 public @interface IntegrationTest {

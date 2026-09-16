@@ -5,6 +5,8 @@ import com.knowledgelink.access.domain.ScopeGrantRepository;
 import com.knowledgelink.account.domain.Account;
 import com.knowledgelink.account.domain.AccountRepository;
 import com.knowledgelink.account.domain.AccountRole;
+import com.knowledgelink.job.domain.JobStatus;
+import com.knowledgelink.job.domain.SlotKey;
 import com.knowledgelink.source.domain.SourceConnection;
 import com.knowledgelink.source.domain.SourceConnectionRepository;
 import com.knowledgelink.source.domain.SourceKind;
@@ -12,6 +14,10 @@ import com.knowledgelink.source.domain.SourceScope;
 import com.knowledgelink.source.domain.SourceScopeRepository;
 import com.knowledgelink.workspace.domain.Workspace;
 import com.knowledgelink.workspace.domain.WorkspaceRepository;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Map;
 import org.springframework.boot.test.context.TestComponent;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -53,8 +59,11 @@ public class TestFixtures {
 
     public void reset() {
         clock.reset();
-        jdbcTemplate.execute("TRUNCATE scope_grant, source_scope, source_connection, "
+        jdbcTemplate.execute("TRUNCATE job, scope_grant, source_scope, source_connection, "
                 + "spring_session_attributes, spring_session, account, workspace CASCADE");
+        // execution_slot은 job을 참조해 CASCADE로 함께 비워진다. 마이그레이션이 넣는 고정 3행을 다시 넣는다.
+        jdbcTemplate.execute("INSERT INTO execution_slot (slot_key) VALUES ('SYNC'), ('INDEX'), ('AI') "
+                + "ON CONFLICT DO NOTHING");
     }
 
     public Workspace workspace(String name) {
@@ -110,5 +119,29 @@ public class TestFixtures {
     public long count(String table) {
         Long count = jdbcTemplate.queryForObject("SELECT count(*) FROM " + table, Long.class);
         return count == null ? 0 : count;
+    }
+
+    public long countJobs(JobStatus status) {
+        Long count = jdbcTemplate.queryForObject("SELECT count(*) FROM job WHERE status = ?", Long.class,
+                status.name());
+        return count == null ? 0 : count;
+    }
+
+    /** 슬롯 한 행. 비어 있으면 job_id·run_token·lease_expires_at이 null이다. */
+    public Map<String, Object> slot(SlotKey key) {
+        return jdbcTemplate.queryForMap(
+                "SELECT job_id, run_token, lease_expires_at FROM execution_slot WHERE slot_key = ?", key.name());
+    }
+
+    /** 작업 결과·커서 저장을 흉내 낸다. 호출한 transaction 안에서 실행된다. */
+    public void markSynced(SourceScope scope, Instant at) {
+        jdbcTemplate.update("UPDATE source_scope SET last_synced_at = ? WHERE id = ?",
+                at.atOffset(ZoneOffset.UTC), scope.getId());
+    }
+
+    public Instant lastSyncedAt(SourceScope scope) {
+        OffsetDateTime value = jdbcTemplate.queryForObject(
+                "SELECT last_synced_at FROM source_scope WHERE id = ?", OffsetDateTime.class, scope.getId());
+        return value == null ? null : value.toInstant();
     }
 }
