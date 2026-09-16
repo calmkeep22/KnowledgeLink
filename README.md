@@ -9,7 +9,7 @@ Jira 이슈와 GitHub PR에서 유사한 과거 업무, 관련 코드 변경과 
 [명세 목차](docs/knowledge-link/00-overview.md)에서 기능·화면·데이터·API·AI 처리·테스트 기준을 확인한다. 현재 구현은 이 명세를 기준으로 한다.
 변경 이력은 [CHANGELOG](CHANGELOG.md), 설계 결정은 [ADR](docs/adr), 테스트 결과는 [테스트 결과 기록](docs/testing/test-report.md)에 남긴다.
 
-기술 스택은 Java 21·Spring Boot 4.1, React·TypeScript(예정), PostgreSQL·pgvector·pg_trgm이다. 단일 AWS 서버에 Docker Compose·Nginx로 배포하며 개발은 로컬과 fake AI로 시작한다. 실제 AI 공급자·모델과 서버 상품은 평가 전에 결정한다.
+기술 스택은 Java 21·Spring Boot 4.1, React·TypeScript(예정), PostgreSQL·pgvector·pg_trgm이다. 앱은 AWS 서버 1대에 Docker Compose·Nginx로, DB는 Amazon RDS for PostgreSQL로 배포하며([ADR 0004](docs/adr/0004-rds-postgresql-for-production.md)) 개발은 로컬과 fake AI로 시작한다. 실제 AI 공급자·모델과 서버 상품은 평가 전에 결정한다.
 
 ## 로컬 실행
 
@@ -40,7 +40,7 @@ docker compose up -d
 | --- | --- | --- |
 | 1 | 프로젝트 기반, 인증(F01), 공통 오류, 계정 seed | 구현 완료. 2026-09-12 기준 단위 테스트 33건, 통합 테스트 19건(T01 포함) 통과 |
 | 2 | scope·grant 접근 모델, `GET /scopes` | 구현 완료. 2026-09-15 기준 단위 테스트 63건, 통합 테스트 35건 통과 |
-| 3 | 작업 엔진(job·실행 슬롯·lease) | 예정 |
+| 3 | 작업 엔진(job·실행 슬롯·lease) | 진행 중(`feat/job-engine`). 엔진·실행기 구현, 2026-09-15 기준 단위 테스트 75건, 통합 테스트 57건 통과(T24·T32 PASS, T25 일부). 작업 handler와 `/jobs` API는 아직 없음 |
 | 4~9 | 커넥터·색인·검색·AI·프론트엔드·배포 | 예정 |
 
 - 명세의 API·AI 계약과 수용 테스트 중 위 표에 없는 항목은 아직 구현·실행되지 않았다.

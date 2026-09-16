@@ -95,15 +95,15 @@ scope는 Jira 프로젝트 1개 또는 GitHub 저장소 1개이며 접근 단위
 | 항목 | 방침 |
 | --- | --- |
 | 개발 | 로컬 docker compose(PostgreSQL+pgvector)와 fake AI. AWS 비용 없음 |
-| 데모 서버 | 서버 1대에서 Nginx·Spring Boot·PostgreSQL을 docker compose로 실행. React 빌드 파일은 Nginx로 제공. Lightsail과 EC2 중 메모리 2GB 이상 최소 사양을 견적 비교 후 선택 |
-| 쓰지 않는 것 | RDS, 로드밸런서, NAT Gateway, 관리형 벡터 DB·검색 서비스, 컨테이너 오케스트레이션 |
-| 운영 시간 | 상시 운영 대신 데모·심사 기간에만 켠다. 중지 중 과금 방식은 상품마다 달라 선택 시 확인 |
-| 백업 | 하루 1회 pg_dump를 S3에 저장, 7일 후 자동 삭제 |
+| 데모 서버 | 서버 1대에서 Nginx·Spring Boot를 docker compose로 실행하고, DB는 Amazon RDS for PostgreSQL 17(Single-AZ)을 쓴다([ADR 0004](../adr/0004-rds-postgresql-for-production.md)). React 빌드 파일은 Nginx로 제공. 앱 서버는 RDS와 같은 VPC에 두며(Lightsail은 VPC peering이 필요해 EC2 우선) 메모리 2GB 이상 최소 사양을 견적 비교 후 선택 |
+| 쓰지 않는 것 | RDS Multi-AZ, 로드밸런서, NAT Gateway, 관리형 벡터 DB·검색 서비스, 컨테이너 오케스트레이션 |
+| 운영 시간 | 상시 운영 대신 데모·심사 기간에만 앱 서버와 RDS를 켠다. 중지 중 과금 방식은 상품마다 달라 선택 시 확인. RDS는 중지 7일 후 자동으로 다시 시작되므로 긴 휴지 기간에는 스냅샷 후 삭제를 검토 |
+| 백업 | RDS 자동 백업(보존 7일)과 시점 복구 |
 | HTTPS | 무료 인증서(Let's Encrypt). 도메인은 선택 |
 | 비밀값 | 서버 환경 파일 권한 제한, 저장소 커밋 금지 |
 | 비용 확인 | AWS 예산 알림 설정. 알림은 차단 장치가 아니므로 앱의 AI 월 한도로 유료 호출을 막는다 |
 | AI 공급자 | OpenAI API와 Amazon Bedrock을 adapter로 교체할 수 있게 둔다. AWS 크레딧을 Bedrock 요금에 쓸 수 있는지 확인 후 결정 |
 
-실제 월 비용은 서버 사양·리전·운영 시간·공인 IP·저장 용량·AI 사용량에 따라 달라지며 이 문서는 견적이 아니다. 가격과 크레딧 조건은 가입·배포 시 공식 안내로 확인한다.
+실제 월 비용은 서버·RDS 사양, 리전, 운영 시간, 공인 IP, 저장·백업 용량, AI 사용량에 따라 달라지며 이 문서는 견적이 아니다. 가격과 크레딧 조건은 가입·배포 시 공식 안내로 확인한다.
 
 관련: [화면 흐름과 간단한 와이어프레임](02-screen-flow.md) · [ERD와 상태 전이](03-erd-state.md) · [API 명세서](04-api-spec.md) · [AI 처리 명세서](05-ai-processing.md)
