@@ -23,6 +23,6 @@ class NewJobTest {
     @Test
     void 입력을_주지_않으면_빈_JSON_객체다() {
         assertThat(NewJob.forTarget(WORKSPACE, JobKind.ANALYSIS, UUID.randomUUID()).snapshotJson()).isEqualTo("{}");
-        assertThat(new NewJob(WORKSPACE, JobKind.INDEX, null, null, " ").snapshotJson()).isEqualTo("{}");
+        assertThat(new NewJob(WORKSPACE, JobKind.INDEX, null, null, null, " ").snapshotJson()).isEqualTo("{}");
     }
 }

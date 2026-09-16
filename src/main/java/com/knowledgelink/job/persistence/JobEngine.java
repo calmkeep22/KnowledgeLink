@@ -69,13 +69,14 @@ public class JobEngine {
                 .addValue("kind", job.kind().name())
                 .addValue("scopeId", job.scopeId(), Types.OTHER)
                 .addValue("targetId", job.targetId(), Types.OTHER)
+                .addValue("requestedBy", job.requestedBy(), Types.OTHER)
                 .addValue("snapshot", job.snapshotJson())
                 .addValue("monthKey", YearMonth.from(now.atZone(BILLING_ZONE)).toString())
                 .addValue("now", utc(now));
         List<UUID> inserted = jdbc.queryForList("""
-                INSERT INTO job (id, workspace_id, kind, status, scope_id, target_id, attempt_count, next_run_at,
+                INSERT INTO job (id, workspace_id, kind, status, scope_id, target_id, requested_by, attempt_count, next_run_at,
                                  snapshot, month_key, created_at, updated_at)
-                VALUES (:id, :workspaceId, :kind, 'QUEUED', :scopeId, :targetId, 0, :now,
+                VALUES (:id, :workspaceId, :kind, 'QUEUED', :scopeId, :targetId, :requestedBy, 0, :now,
                         CAST(:snapshot AS jsonb), :monthKey, :now, :now)
                 ON CONFLICT (scope_id) WHERE kind = 'SYNC' AND status IN ('QUEUED', 'RUNNING', 'RETRY_WAIT')
                 DO NOTHING
@@ -250,12 +251,27 @@ public class JobEngine {
     @Transactional(readOnly = true)
     public Optional<JobView> find(UUID jobId) {
         return jdbc.query("""
-                        SELECT id, workspace_id, kind, status, scope_id, target_id, stage, attempt_count, owner_id,
+                        SELECT id, workspace_id, kind, status, scope_id, target_id, requested_by, stage, attempt_count, owner_id,
                                run_token, lease_expires_at, next_run_at, error_code, month_key
                         FROM job WHERE id = :jobId
                         """, new MapSqlParameterSource().addValue("jobId", jobId, Types.OTHER), JobEngine::toView)
                 .stream()
                 .findFirst();
+    }
+
+    /**
+     * 수동 재시도. FAILED 작업만 QUEUED로 되돌리고 같은 jobId·누적 시도·입장월을 유지한다.
+     * 되돌린 경우에만 true다. 같은 scope에 활성 SYNC가 이미 있으면 unique 제약에 걸려 예외가 난다.
+     */
+    @Transactional
+    public boolean requeueFailed(UUID jobId) {
+        Instant now = clock.instant();
+        return jdbc.update("""
+                UPDATE job SET status = 'QUEUED', next_run_at = :now, updated_at = :now
+                WHERE id = :jobId AND status = 'FAILED'
+                """, new MapSqlParameterSource()
+                .addValue("jobId", jobId, Types.OTHER)
+                .addValue("now", utc(now))) == 1;
     }
 
     /** 이 lease가 아직 소유자인지 슬롯 → 작업 순서로 잠그며 확인하고, 지금까지 쓴 시도 횟수를 돌려준다. */
@@ -340,6 +356,7 @@ public class JobEngine {
                 JobStatus.valueOf(rs.getString("status")),
                 rs.getObject("scope_id", UUID.class),
                 rs.getObject("target_id", UUID.class),
+                rs.getObject("requested_by", UUID.class),
                 rs.getString("stage"),
                 rs.getInt("attempt_count"),
                 rs.getString("owner_id"),

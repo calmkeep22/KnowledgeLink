@@ -31,6 +31,9 @@
   - 재시도는 최초 포함 3회, 30초~300초 exponential backoff + jitter. Retry-After가 더 길면 그만큼 기다린다.
   - scope당 활성 SYNC는 하나다. 이미 있으면 새로 만들지 않고 그 작업을 돌려준다.
   - 작업 실행기(`kl.jobs.*`)는 주기마다 복구 → 재시도 승격 → 빈 슬롯 선점 → 실행을 하고, 실행 중에는 heartbeat를 보낸다. 아직 작업 handler가 없어 실제로 실행되는 작업은 없다.
+- `GET /jobs/{jobId}`: 상태·단계·시도 횟수·실패 코드·`canRetry`·결과 ID를 돌려준다. 요청한 본인과 같은 조직 ADMIN만 볼 수 있고, 요청자가 없는 시스템 작업(동기화·색인 등)은 ADMIN만 본다. 권한 밖 작업은 없는 작업과 같은 404다. 응답에 소유자·run_token·lease는 담지 않는다.
+- `POST /jobs/{jobId}/retry`: 실패한 작업만 같은 jobId로 다시 큐에 넣고 누적 시도와 입장월을 유지한다(202). 사용량이 불명인 실패(`PROVIDER_USAGE_UNKNOWN`)는 막고, 같은 scope에 활성 SYNC가 있으면 409 `ACTIVE_SYNC_EXISTS`다.
+- V6: `job.requested_by`. 같은 조직의 계정만 요청자가 될 수 있도록 `(requested_by, workspace_id)` 복합 FK를 걸었다.
 
 ### Changed
 - `UuidV7`이 한 JVM 안에서 단조 증가한다(RFC 9562 6.2 Method 2). 같은 밀리초 안에서는 무작위 양수를 더한다.
@@ -47,6 +50,7 @@
 
 ### Notes
 - 명세 대비 차이: `login_id`는 조직 내 unique보다 강한 전역 unique로 두었다(단일 조직 MVP).
-- 오류 코드 `INVALID_CREDENTIALS`, `PASSWORD_CHANGE_REQUIRED`, `METHOD_NOT_ALLOWED`, `UNSUPPORTED_MEDIA_TYPE`, `INTERNAL_ERROR`, `NO_ACCESSIBLE_SCOPE`를 추가했다.
+- 오류 코드 `INVALID_CREDENTIALS`, `PASSWORD_CHANGE_REQUIRED`, `METHOD_NOT_ALLOWED`, `UNSUPPORTED_MEDIA_TYPE`, `INTERNAL_ERROR`, `NO_ACCESSIBLE_SCOPE`, `ACTIVE_SYNC_EXISTS`를 추가했다.
 - 명세 대비 차이: `source_connection.name`(조직 안 unique)을 추가했다. 운영 스크립트의 grant가 `연결이름:표시키`로 scope를 가리키는 데 쓴다. `source_scope.sync_cursor`, `last_reconciled_at`은 동기화 단계에서 추가한다.
 - 명세 대비 차이: `job`의 대상 ID를 `scope_id`(SYNC·RECONCILE 대상, 같은 조직 scope FK)와 `target_id`(그 밖의 대상)로 나눴다. `residual_micro_usd`와 복구 시 비용 상태(SENT/UNKNOWN) 반영은 AI 단계에서 추가한다.
+- 명세 대비 차이: `job.requested_by`를 추가했다. 명세 ERD의 job에는 없지만, `GET /jobs/{jobId}`의 "요청자 본인" 권한을 분석·질문 행 없이 판단하려면 필요하다.
