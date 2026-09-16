@@ -1,6 +1,6 @@
 # ADR 0001. 벡터 검색을 별도 DB 없이 PostgreSQL + pgvector로 처리한다
 
-- 상태: 채택
+- 상태: 채택(운영 DB를 어디서 돌리는지는 [ADR 0004](0004-rds-postgresql-for-production.md)로 변경)
 - 날짜: 2026-09-12
 
 ## 맥락
@@ -28,4 +28,4 @@ PostgreSQL 하나에 업무 데이터·작업 큐·세션·벡터(pgvector)·tri
 ## 결과
 
 - 초기에는 ANN 인덱스 없이 정확한 거리 계산을 쓴다. 청크 수와 검색 지연을 측정한 뒤 HNSW 도입을 판단하고, 도입 시 scope 필터와 함께 결과 누락이 없는지 검증한다.
-- 로컬·테스트·운영 모두 같은 `pgvector/pgvector` 이미지를 쓴다.
+- 로컬·테스트는 `pgvector/pgvector` 이미지를, 운영은 Amazon RDS for PostgreSQL을 쓴다([ADR 0004](0004-rds-postgresql-for-production.md)). PostgreSQL 메이저 버전과 pgvector 버전을 맞춘다.

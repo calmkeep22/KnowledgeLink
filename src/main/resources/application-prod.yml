@@ -1,4 +1,6 @@
 # 운영: 모든 접속 정보는 환경 변수로 주입한다. Nginx 뒤에서 HTTPS로만 제공한다.
+# DB는 Amazon RDS for PostgreSQL(ADR 0004). RDS는 SSL을 강제하므로 KL_DB_URL에 sslmode=verify-full과
+# RDS CA 인증서 경로(sslrootcert)를 넣는다. 예: jdbc:postgresql://<endpoint>:5432/knowledge_link?sslmode=verify-full&sslrootcert=/etc/kl/rds-ca.pem
 spring:
   datasource:
     url: ${KL_DB_URL}
