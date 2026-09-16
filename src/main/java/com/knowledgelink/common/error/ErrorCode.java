@@ -18,6 +18,7 @@ public enum ErrorCode {
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 자료를 찾을 수 없습니다.", false),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 요청 방식입니다.", false),
     INVALID_STATE(HttpStatus.CONFLICT, "다른 요청과 충돌했습니다. 최신 상태를 확인해 주세요.", false),
+    ACTIVE_SYNC_EXISTS(HttpStatus.CONFLICT, "이미 진행 중인 동기화 작업이 있습니다.", false),
     NO_ACCESSIBLE_SCOPE(HttpStatus.UNPROCESSABLE_ENTITY, "검색 가능한 프로젝트가 없습니다. 관리자에게 요청해 주세요.", false),
     UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "지원하지 않는 콘텐츠 형식입니다.", false),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "일시적인 오류가 발생했습니다.", true),
