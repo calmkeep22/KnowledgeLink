@@ -41,6 +41,18 @@ management:
     health:
       probes:
         enabled: true
+  # 관측(ADR 0005). 지표·트레이스는 만들되 기본으로는 내보내지 않는다.
+  # 수집기가 없을 때 전송 오류만 쌓이기 때문이다. 내보내기는 otel 프로필에서 켠다.
+  tracing:
+    sampling:
+      # 데모 규모라 요청을 모두 기록한다. 트래픽이 늘면 낮춘다.
+      probability: 1.0
+    export:
+      enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false
 
 kl:
   jobs:

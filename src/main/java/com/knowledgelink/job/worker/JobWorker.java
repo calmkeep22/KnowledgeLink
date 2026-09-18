@@ -5,8 +5,10 @@ import com.knowledgelink.job.application.JobOutcome;
 import com.knowledgelink.job.application.JobProperties;
 import com.knowledgelink.job.application.LeaseLostException;
 import com.knowledgelink.job.domain.JobKind;
+import com.knowledgelink.job.domain.JobStatus;
 import com.knowledgelink.job.domain.SlotKey;
 import com.knowledgelink.job.persistence.JobEngine;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,8 +34,12 @@ public class JobWorker implements SmartLifecycle {
     /** handler가 예외를 던졌을 때 기록하는 오류 코드. 일시 실패로 보고 재시도한다. */
     public static final String HANDLER_ERROR = "HANDLER_ERROR";
 
+    /** 상태별 작업 수·슬롯 사용 지표를 갱신하는 간격. 지표 수집 주기와 비슷하게 둔다. */
+    private static final Duration QUEUE_METRICS_INTERVAL = Duration.ofSeconds(15);
+
     private final JobEngine engine;
     private final JobHandlers handlers;
+    private final JobMetrics metrics;
     private final JobProperties properties;
     private final String ownerId;
     private final ScheduledExecutorService scheduler;
@@ -45,10 +51,11 @@ public class JobWorker implements SmartLifecycle {
      * @param scheduler 주기 실행과 heartbeat용
      * @param executor  handler 실행용. 슬롯마다 한 작업씩 동시에 실행된다.
      */
-    public JobWorker(JobEngine engine, JobHandlers handlers, JobProperties properties, String ownerId,
-                     ScheduledExecutorService scheduler, Executor executor) {
+    public JobWorker(JobEngine engine, JobHandlers handlers, JobMetrics metrics, JobProperties properties,
+                     String ownerId, ScheduledExecutorService scheduler, Executor executor) {
         this.engine = engine;
         this.handlers = handlers;
+        this.metrics = metrics;
         this.properties = properties;
         this.ownerId = ownerId;
         this.scheduler = scheduler;
@@ -59,6 +66,8 @@ public class JobWorker implements SmartLifecycle {
     public void start() {
         running = true;
         scheduler.scheduleWithFixedDelay(this::tickSafely, 0, properties.pollInterval().toMillis(),
+                TimeUnit.MILLISECONDS);
+        scheduler.scheduleWithFixedDelay(this::refreshQueueMetricsSafely, 0, QUEUE_METRICS_INTERVAL.toMillis(),
                 TimeUnit.MILLISECONDS);
         log.info("job worker started ownerId={}", ownerId);
     }
@@ -80,7 +89,7 @@ public class JobWorker implements SmartLifecycle {
 
     /** 주기 실행 한 번. 테스트에서도 직접 호출한다. */
     public void tick() {
-        engine.recoverExpired();
+        metrics.recovered(engine.recoverExpired());
         engine.promoteDueRetries();
         for (SlotKey slot : SlotKey.values()) {
             Set<JobKind> kinds = handlers.kindsFor(slot);
@@ -98,6 +107,7 @@ public class JobWorker implements SmartLifecycle {
                 busySlots.remove(slot);
                 continue;
             }
+            metrics.claimed(lease.get());
             try {
                 executor.execute(() -> {
                     try {
@@ -113,6 +123,11 @@ public class JobWorker implements SmartLifecycle {
         }
     }
 
+    /** 상태별 작업 수와 슬롯 사용 여부를 지표에 반영한다. */
+    public void refreshQueueMetrics() {
+        metrics.update(engine.queueSnapshot());
+    }
+
     private void tickSafely() {
         try {
             tick();
@@ -121,18 +136,30 @@ public class JobWorker implements SmartLifecycle {
         }
     }
 
+    private void refreshQueueMetricsSafely() {
+        try {
+            refreshQueueMetrics();
+        } catch (RuntimeException e) {
+            log.warn("job queue metrics refresh failed", e);
+        }
+    }
+
     private void run(JobLease lease) {
         LeasedJobContext context = new LeasedJobContext(engine, lease);
         long beatMillis = properties.heartbeat().toMillis();
         ScheduledFuture<?> heartbeat = scheduler.scheduleAtFixedRate(
                 () -> beat(context), beatMillis, beatMillis, TimeUnit.MILLISECONDS);
+        long started = System.nanoTime();
+        String outcome = JobMetrics.ERROR;
         try {
-            finish(lease, execute(context));
+            outcome = finish(lease, execute(context));
         } catch (LeaseLostException e) {
+            outcome = JobMetrics.LEASE_LOST;
             log.warn("job lease lost, result discarded jobId={} kind={} attempt={}",
                     lease.jobId(), lease.kind(), lease.attemptCount());
         } finally {
             heartbeat.cancel(false);
+            metrics.finished(lease.kind(), outcome, Duration.ofNanos(System.nanoTime() - started));
         }
     }
 
@@ -149,12 +176,22 @@ public class JobWorker implements SmartLifecycle {
         }
     }
 
-    private void finish(JobLease lease, JobOutcome outcome) {
-        switch (outcome) {
-            case JobOutcome.Succeeded succeeded -> engine.succeed(lease, succeeded.resultWriter());
-            case JobOutcome.RetryLater retry -> engine.retryLater(lease, retry.errorCode(), retry.notBefore());
-            case JobOutcome.Failed failed -> engine.fail(lease, failed.errorCode());
-        }
+    /** 결과에 맞게 상태를 바꾸고, 지표에 남길 결과 이름을 돌려준다. */
+    private String finish(JobLease lease, JobOutcome outcome) {
+        return switch (outcome) {
+            case JobOutcome.Succeeded succeeded -> {
+                engine.succeed(lease, succeeded.resultWriter());
+                yield JobMetrics.SUCCEEDED;
+            }
+            case JobOutcome.RetryLater retry ->
+                    engine.retryLater(lease, retry.errorCode(), retry.notBefore()) == JobStatus.FAILED
+                            ? JobMetrics.FAILED
+                            : JobMetrics.RETRY;
+            case JobOutcome.Failed failed -> {
+                engine.fail(lease, failed.errorCode());
+                yield JobMetrics.FAILED;
+            }
+        };
     }
 
     private void beat(LeasedJobContext context) {

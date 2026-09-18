@@ -8,7 +8,7 @@
 
 첫 목표는 **단일 조직, Jira Cloud 프로젝트 1~2개, GitHub 저장소 1~2개(본인이 생성한 시나리오 데이터, 6장), 관리자·개발자 시연 계정**으로 동기화 → 색인 → 유사 업무 분석 → 질문의 전체 흐름을 끝까지 구현하는 것이다. 계정·scope 접근 목록·개발자 식별자 연결은 개발용 seed/운영 스크립트로 등록한다. 스크립트도 비밀번호 hash·조직·역할 검증을 적용한다. Jira·GitHub 인증 정보는 서버 환경 비밀값으로만 둔다.
 
-후속 범위: Slack·Notion·Confluence 연동, webhook 실시간 수집, 원본 권한 자동 동기화, 계정·권한·식별자 관리 화면, 조직 지식 그래프 시각화, 코드 diff 본문 분석, Redis·Prometheus 등 인프라 확장(측정 근거가 생긴 뒤 결정).
+후속 범위: Slack·Notion·Confluence 연동, webhook 실시간 수집, 원본 권한 자동 동기화, 계정·권한·식별자 관리 화면, 조직 지식 그래프 시각화, 코드 diff 본문 분석, Redis 등 인프라 확장(측정 근거가 생긴 뒤 결정). 측정 수단인 관측(OpenTelemetry·Prometheus·Grafana)은 [ADR 0005](../adr/0005-opentelemetry-otlp-observability.md)로 먼저 도입했다.
 
 ## 2. 역할과 접근
 
@@ -101,6 +101,7 @@ scope는 Jira 프로젝트 1개 또는 GitHub 저장소 1개이며 접근 단위
 | 백업 | RDS 자동 백업(보존 7일)과 시점 복구 |
 | HTTPS | 무료 인증서(Let's Encrypt). 도메인은 선택 |
 | 비밀값 | 서버 환경 파일 권한 제한, 저장소 커밋 금지 |
+| 관측 | 앱은 OTLP로 지표·트레이스를 내보낸다. 로컬은 `grafana/otel-lgtm` 컨테이너, 운영은 외부 수집기(Grafana Cloud 무료 티어 후보)로 보내며 배포 전에 한도를 확인해 정한다([ADR 0005](../adr/0005-opentelemetry-otlp-observability.md)) |
 | 비용 확인 | AWS 예산 알림 설정. 알림은 차단 장치가 아니므로 앱의 AI 월 한도로 유료 호출을 막는다 |
 | AI 공급자 | OpenAI API와 Amazon Bedrock을 adapter로 교체할 수 있게 둔다. AWS 크레딧을 Bedrock 요금에 쓸 수 있는지 확인 후 결정 |
 
