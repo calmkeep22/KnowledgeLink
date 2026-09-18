@@ -1,0 +1,19 @@
+# 지표·트레이스를 OTLP(HTTP)로 내보낸다(ADR 0005).
+# 로컬: docker compose --profile observability up -d 후 --spring.profiles.active=local,otel
+# 운영: KL_OTLP_ENDPOINT에 수집기 주소를 넣는다. 인증 헤더가 필요하면 값은 환경 변수로만 넣는다.
+#   MANAGEMENT_OTLP_METRICS_EXPORT_HEADERS_AUTHORIZATION
+#   MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_HEADERS_AUTHORIZATION
+management:
+  tracing:
+    export:
+      enabled: true
+  otlp:
+    metrics:
+      export:
+        enabled: true
+        url: ${KL_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${KL_OTLP_ENDPOINT:http://localhost:4318}/v1/traces

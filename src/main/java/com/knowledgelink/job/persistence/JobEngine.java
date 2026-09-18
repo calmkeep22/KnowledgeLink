@@ -8,6 +8,7 @@ import com.knowledgelink.job.application.JobProperties;
 import com.knowledgelink.job.application.JobView;
 import com.knowledgelink.job.application.LeaseLostException;
 import com.knowledgelink.job.application.NewJob;
+import com.knowledgelink.job.application.QueueSnapshot;
 import com.knowledgelink.job.application.RetryPolicy;
 import com.knowledgelink.job.domain.JobKind;
 import com.knowledgelink.job.domain.JobStatus;
@@ -23,9 +24,14 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Collection;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -274,6 +280,18 @@ public class JobEngine {
                 .addValue("now", utc(now))) == 1;
     }
 
+    /** 지표용. 상태별 작업 수와 지금 사용 중인 슬롯. */
+    @Transactional(readOnly = true)
+    public QueueSnapshot queueSnapshot() {
+        Map<JobStatus, Long> counts = new EnumMap<>(JobStatus.class);
+        jdbc.query("SELECT status, count(*) AS n FROM job GROUP BY status", Map.of(),
+                (RowCallbackHandler) rs -> counts.put(JobStatus.valueOf(rs.getString("status")), rs.getLong("n")));
+        Set<SlotKey> busy = EnumSet.noneOf(SlotKey.class);
+        jdbc.queryForList("SELECT slot_key FROM execution_slot WHERE job_id IS NOT NULL", Map.of(), String.class)
+                .forEach(key -> busy.add(SlotKey.valueOf(key)));
+        return new QueueSnapshot(counts, busy);
+    }
+
     /** 이 lease가 아직 소유자인지 슬롯 → 작업 순서로 잠그며 확인하고, 지금까지 쓴 시도 횟수를 돌려준다. */
     private int lockOwned(JobLease lease, MapSqlParameterSource params) {
         List<String> ownedSlot = jdbc.queryForList("""
@@ -328,15 +346,17 @@ public class JobEngine {
     private JobLease loadLease(UUID jobId) {
         return jdbc.queryForObject("""
                 SELECT id, workspace_id, kind, scope_id, target_id, stage, attempt_count,
-                       CAST(snapshot AS text) AS snapshot, owner_id, run_token, lease_expires_at
+                       CAST(snapshot AS text) AS snapshot, owner_id, run_token, lease_expires_at,
+                       next_run_at, updated_at
                 FROM job WHERE id = :jobId
                 """, new MapSqlParameterSource().addValue("jobId", jobId, Types.OTHER), (rs, row) -> {
                     JobKind kind = JobKind.valueOf(rs.getString("kind"));
+                    // 선점 직후 읽으므로 updated_at이 곧 선점 시각이다.
                     return new JobLease(rs.getObject("id", UUID.class), rs.getObject("workspace_id", UUID.class),
                             kind, kind.slot(), rs.getObject("scope_id", UUID.class),
                             rs.getObject("target_id", UUID.class), rs.getString("stage"), rs.getInt("attempt_count"),
                             rs.getString("snapshot"), rs.getString("owner_id"), rs.getObject("run_token", UUID.class),
-                            instant(rs, "lease_expires_at"));
+                            instant(rs, "lease_expires_at"), instant(rs, "next_run_at"), instant(rs, "updated_at"));
                 });
     }
 

@@ -1,4 +1,4 @@
-# 로컬 개발용 DB. 운영 배포 구성은 별도 파일로 둔다.
+# 로컬 개발용 DB와 관측 스택. 운영 배포 구성은 별도 파일로 둔다.
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -15,6 +15,16 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # 관측 스택(ADR 0005). OpenTelemetry Collector·Prometheus·Tempo·Grafana가 한 컨테이너에 들어 있다.
+  # 메모리를 쓰므로 필요할 때만 켠다: docker compose --profile observability up -d
+  # Grafana는 http://localhost:3000, 앱은 --spring.profiles.active=local,otel 로 실행한다.
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.17.0
+    profiles: ["observability"]
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:4318:4318"
 
 volumes:
   kl-pgdata:

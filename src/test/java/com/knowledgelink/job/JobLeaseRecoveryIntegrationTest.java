@@ -16,12 +16,14 @@ import com.knowledgelink.job.domain.JobStatus;
 import com.knowledgelink.job.domain.SlotKey;
 import com.knowledgelink.job.persistence.JobEngine;
 import com.knowledgelink.job.worker.JobHandlers;
+import com.knowledgelink.job.worker.JobMetrics;
 import com.knowledgelink.job.worker.JobWorker;
 import com.knowledgelink.source.domain.SourceScope;
 import com.knowledgelink.support.IntegrationTest;
 import com.knowledgelink.support.MutableClock;
 import com.knowledgelink.support.TestFixtures;
 import com.knowledgelink.workspace.domain.Workspace;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -61,11 +63,15 @@ class JobLeaseRecoveryIntegrationTest {
     private final ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
     private Workspace org;
     private SourceScope pay;
+    private SimpleMeterRegistry meters;
+    private JobMetrics metrics;
 
     @BeforeEach
     void setUp() {
         fixtures.reset();
         clock.set(T0);
+        meters = new SimpleMeterRegistry();
+        metrics = new JobMetrics(meters);
         org = fixtures.workspace("Recovery Org");
         pay = fixtures.scope(fixtures.jiraConnection(org, "jira", "site-1"), "10000", "PAY");
     }
@@ -91,6 +97,8 @@ class JobLeaseRecoveryIntegrationTest {
         assertThat(job.attemptCount()).isEqualTo(1);
         assertThat(fixtures.lastSyncedAt(pay)).isEqualTo(T0);
         assertThat(fixtures.slot(SlotKey.SYNC).get("job_id")).isNull();
+        assertThat(meters.get("kl.jobs.claimed").tag("kind", "SYNC").counter().count()).isEqualTo(1);
+        assertThat(executions("SYNC", JobMetrics.SUCCEEDED)).isEqualTo(1);
     }
 
     @Test
@@ -109,6 +117,7 @@ class JobLeaseRecoveryIntegrationTest {
         assertThat(recovered.errorCode()).isEqualTo(JobEngine.LEASE_EXPIRED);
         assertThat(recovered.ownerId()).isNull();
         assertThat(fixtures.slot(SlotKey.SYNC).get("job_id")).isNull();
+        assertThat(meters.get("kl.jobs.recovered").counter().count()).isEqualTo(1);
 
         clock.advance(Duration.ofSeconds(30));
         restarted.tick();
@@ -200,6 +209,7 @@ class JobLeaseRecoveryIntegrationTest {
         assertThat(job.status()).isEqualTo(JobStatus.RUNNING);
         assertThat(job.ownerId()).isEqualTo("other");
         assertThat(job.runToken()).isEqualTo(takeover.get().runToken());
+        assertThat(executions("SYNC", JobMetrics.LEASE_LOST)).isEqualTo(1);
     }
 
     @Test
@@ -214,6 +224,25 @@ class JobLeaseRecoveryIntegrationTest {
         assertThat(job.status()).isEqualTo(JobStatus.RETRY_WAIT);
         assertThat(job.errorCode()).isEqualTo(JobWorker.HANDLER_ERROR);
         assertThat(fixtures.slot(SlotKey.SYNC).get("job_id")).isNull();
+        assertThat(executions("SYNC", JobMetrics.RETRY)).isEqualTo(1);
+    }
+
+    @Test
+    void 큐_지표는_상태별_작업_수와_사용_중인_슬롯을_보여준다() {
+        enqueueSync();
+        engine.enqueue(NewJob.forTarget(org.getId(), JobKind.INDEX, UUID.randomUUID()));
+        engine.claim(SlotKey.SYNC, SYNC_KINDS, "worker-1").orElseThrow();
+
+        worker("worker-2", handler(context -> JobOutcome.succeeded())).refreshQueueMetrics();
+
+        assertThat(meters.get("kl.jobs.count").tag("status", "RUNNING").gauge().value()).isEqualTo(1);
+        assertThat(meters.get("kl.jobs.count").tag("status", "QUEUED").gauge().value()).isEqualTo(1);
+        assertThat(meters.get("kl.jobs.slot.busy").tag("slot", "SYNC").gauge().value()).isEqualTo(1);
+        assertThat(meters.get("kl.jobs.slot.busy").tag("slot", "AI").gauge().value()).isZero();
+    }
+
+    private long executions(String kind, String outcome) {
+        return meters.get("kl.jobs.execution").tags("kind", kind, "outcome", outcome).timer().count();
     }
 
     private UUID enqueueSync() {
@@ -222,8 +251,8 @@ class JobLeaseRecoveryIntegrationTest {
 
     /** 새로 만든 실행기는 메모리 상태가 없으므로 재시작한 프로세스와 같다. handler는 테스트 스레드에서 실행된다. */
     private JobWorker worker(String ownerId, JobHandler handler) {
-        return new JobWorker(engine, new JobHandlers(List.of(handler)), properties, ownerId, heartbeatScheduler,
-                Runnable::run);
+        return new JobWorker(engine, new JobHandlers(List.of(handler)), metrics, properties, ownerId,
+                heartbeatScheduler, Runnable::run);
     }
 
     private static JobHandler handler(Function<JobContext, JobOutcome> body) {

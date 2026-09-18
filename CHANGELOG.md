@@ -34,11 +34,14 @@
 - `GET /jobs/{jobId}`: 상태·단계·시도 횟수·실패 코드·`canRetry`·결과 ID를 돌려준다. 요청한 본인과 같은 조직 ADMIN만 볼 수 있고, 요청자가 없는 시스템 작업(동기화·색인 등)은 ADMIN만 본다. 권한 밖 작업은 없는 작업과 같은 404다. 응답에 소유자·run_token·lease는 담지 않는다.
 - `POST /jobs/{jobId}/retry`: 실패한 작업만 같은 jobId로 다시 큐에 넣고 누적 시도와 입장월을 유지한다(202). 사용량이 불명인 실패(`PROVIDER_USAGE_UNKNOWN`)는 막고, 같은 scope에 활성 SYNC가 있으면 409 `ACTIVE_SYNC_EXISTS`다.
 - V6: `job.requested_by`. 같은 조직의 계정만 요청자가 될 수 있도록 `(requested_by, workspace_id)` 복합 FK를 걸었다.
+- 관측(ADR 0005): Micrometer 지표와 OpenTelemetry 트레이스를 OTLP로 내보낸다. 기본은 끄고 `otel` 프로필에서 켠다. 로컬은 compose `observability` 프로필의 `grafana/otel-lgtm`으로 본다.
+  - 작업 엔진 지표 `kl.jobs.*`: 선점 수, 대기 시간, 종류·결과별 실행 시간, lease 만료 복구 수, 상태별 작업 수, 슬롯 사용 여부.
 
 ### Changed
 - `UuidV7`이 한 JVM 안에서 단조 증가한다(RFC 9562 6.2 Method 2). 같은 밀리초 안에서는 무작위 양수를 더한다.
 - 엔티티 ID는 새 엔티티를 만들 때만 발급한다. JPA 조회 경로는 ID 생성기를 거치지 않는다.
 - 운영 DB를 서버 1대의 docker compose PostgreSQL에서 Amazon RDS for PostgreSQL 17(Single-AZ)로 바꿨다(ADR 0004). 백업은 pg_dump→S3 대신 RDS 자동 백업과 시점 복구를 쓴다. 로컬·테스트는 계속 `pgvector/pgvector:pg17` 이미지를 쓴다.
+- 명세의 후속 범위에서 Prometheus를 뺐다. 관측 스택을 먼저 도입해 이후 인프라 확장의 측정 근거로 쓴다(ADR 0005).
 
 ### Fixed
 - 같은 밀리초에 발급된 UUIDv7의 순서가 무작위라 PK 인덱스 리프 채움률이 UUIDv4와 같던 문제(70.7% → 90.0%, 인덱스 크기 −21%).
