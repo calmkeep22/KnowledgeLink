@@ -10,8 +10,26 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record DemoAiProperties(
         @DefaultValue("fake") String provider,
         @DefaultValue OpenAi openai,
-        @DefaultValue Bedrock bedrock
+        @DefaultValue Bedrock bedrock,
+        @DefaultValue EmbeddingCache embeddingCache
 ) {
+    /**
+     * 과거 업무 색인 임베딩 저장·병렬 설정.
+     *
+     * @param path 저장 파일 경로. 비어 있으면 저장하지 않고 매번 임베딩한다.
+     * @param parallelism 저장본에 없는 항목을 동시에 임베딩할 수. 공급자 호출 한도 안에서 정한다.
+     */
+    public record EmbeddingCache(
+            @DefaultValue("") String path,
+            @DefaultValue("4") int parallelism
+    ) {
+        public EmbeddingCache {
+            if (parallelism < 1 || parallelism > 16) {
+                throw new IllegalArgumentException("임베딩 병렬 수는 1 이상 16 이하여야 합니다.");
+            }
+        }
+    }
+
     public record OpenAi(
             @DefaultValue("") String apiKey,
             @DefaultValue("") String model,

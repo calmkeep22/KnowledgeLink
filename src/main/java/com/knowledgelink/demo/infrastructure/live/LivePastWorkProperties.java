@@ -35,6 +35,7 @@ public record LivePastWorkProperties(
             @DefaultValue("200") int maxIssues,
             @DefaultValue("Bug") List<String> issueTypes,
             @DefaultValue("") String snapshotPath,
+            @DefaultValue("12h") Duration snapshotMaxAge,
             @DefaultValue("20s") Duration timeout,
             @DefaultValue("800") int detailsMaxLength,
             List<ExampleQuery> examples
@@ -57,6 +58,9 @@ public record LivePastWorkProperties(
             }
             if (timeout == null || timeout.isNegative() || timeout.isZero()) {
                 throw new IllegalArgumentException("timeout은 0보다 커야 합니다.");
+            }
+            if (snapshotMaxAge == null || snapshotMaxAge.isNegative()) {
+                throw new IllegalArgumentException("snapshotMaxAge는 0 이상이어야 합니다.");
             }
             if (detailsMaxLength < 100) {
                 throw new IllegalArgumentException("detailsMaxLength는 100 이상이어야 합니다.");

@@ -28,7 +28,8 @@ import tools.jackson.databind.ObjectMapper;
  * 공개 Jira·GitHub에서 해결된 이슈와 이를 고친 병합 PR을 가져와 과거 업무로 쓴다.
  *
  * <p>병합 PR 제목의 Jira 키(예: {@code KAFKA-12345:})로 이슈를 찾으므로, 모든 이슈에는 이를 고친 PR이 하나 이상 연결된다.
- * 처음 검색할 때 한 번 수집하고, 성공하면 저장본을 남긴다. 수집에 실패하면 저장본, 저장본도 없으면 가명 예시 데이터를 쓴다.
+ * 처음 검색할 때 한 번 수집하고, 성공하면 저장본을 남긴다. 저장본이 {@code snapshotMaxAge}보다 새로우면 수집하지 않고
+ * 저장본으로 바로 시작한다(재시작마다 외부 API를 기다리지 않기 위해서다). 수집에 실패하면 저장본, 저장본도 없으면 가명 예시 데이터를 쓴다.
  */
 @Slf4j
 public final class LivePastWorkSource implements PastWorkSource {
@@ -99,6 +100,11 @@ public final class LivePastWorkSource implements PastWorkSource {
     }
 
     private Loaded fetchOrFallback() {
+        Snapshot saved = readSnapshot();
+        if (saved != null && isFresh(saved)) {
+            log.info("Past work loaded from fresh snapshot fetched at {}", saved.fetchedAt());
+            return new Loaded(saved, "snapshot");
+        }
         try {
             Snapshot fetched = fetch();
             saveSnapshot(fetched);
@@ -109,13 +115,18 @@ public final class LivePastWorkSource implements PastWorkSource {
         } catch (RuntimeException exception) {
             log.warn("Past work fetch failed; trying snapshot", exception);
         }
-        Snapshot saved = readSnapshot();
         if (saved != null) {
-            log.info("Past work loaded from snapshot fetched at {}", saved.fetchedAt());
+            log.info("Past work loaded from stale snapshot fetched at {}", saved.fetchedAt());
             return new Loaded(saved, "snapshot");
         }
         log.warn("No past work snapshot; using bundled example data");
         return new Loaded(new Snapshot("가명 예시 데이터(수집 실패)", null, fallback.findAll(), fallback.links()), "mock");
+    }
+
+    private boolean isFresh(Snapshot snapshot) {
+        return snapshot.fetchedAt() != null
+                && !properties.snapshotMaxAge().isZero()
+                && snapshot.fetchedAt().plus(properties.snapshotMaxAge()).isAfter(clock.instant());
     }
 
     Snapshot fetch() {
