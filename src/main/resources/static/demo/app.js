@@ -4,7 +4,8 @@
     const API_BASE = "/api/v1/demo";
     // 외부 AI 호출은 서버 타임아웃(Bedrock 기본 30초)보다 화면이 먼저 포기하지 않도록 여유를 둔다.
     const SUMMARY_TIMEOUT_MS = 45000;
-    const state = { activities: [], activityById: new Map(), requestSequence: 0 };
+    const MAX_QUERY_LENGTH = 500;
+    const state = { activities: [], activityById: new Map(), requestSequence: 0, similarSequence: 0, similarLoading: false };
 
     const elements = {
         globalStatus: document.querySelector("#global-status"),
@@ -27,7 +28,24 @@
         activityList: document.querySelector("#activity-list"),
         activityCount: document.querySelector("#activity-count"),
         activityError: document.querySelector("#activity-error"),
-        activityErrorMessage: document.querySelector("#activity-error-message")
+        activityErrorMessage: document.querySelector("#activity-error-message"),
+        similarForm: document.querySelector("#similar-form"),
+        similarQuery: document.querySelector("#similar-query"),
+        similarCount: document.querySelector("#similar-count"),
+        similarSubmit: document.querySelector("#similar-submit"),
+        similarChips: document.querySelectorAll("#similar-form .chip"),
+        similarLoading: document.querySelector("#similar-loading"),
+        similarError: document.querySelector("#similar-error"),
+        similarErrorMessage: document.querySelector("#similar-error-message"),
+        similarContent: document.querySelector("#similar-content"),
+        similarOverview: document.querySelector("#similar-overview"),
+        similarGenerated: document.querySelector("#similar-generated"),
+        similarPoints: document.querySelector("#similar-points"),
+        similarPointsCount: document.querySelector("#similar-points-count"),
+        similarApproach: document.querySelector("#similar-approach"),
+        similarApproachCount: document.querySelector("#similar-approach-count"),
+        similarMatches: document.querySelector("#similar-matches"),
+        similarMembers: document.querySelector("#similar-members")
     };
 
     const sectionDefinitions = [
@@ -111,22 +129,27 @@
             .map((id) => ({ id, label: id }));
     }
 
-    async function requestJson(path, timeoutMs = 15000) {
+    async function requestJson(path, timeoutMs = 15000, body) {
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
         try {
+            const headers = { Accept: "application/json" };
+            if (body !== undefined) headers["Content-Type"] = "application/json";
             const response = await fetch(path, {
-                method: "GET",
-                headers: { Accept: "application/json" },
+                method: body === undefined ? "GET" : "POST",
+                headers,
+                body: body === undefined ? undefined : JSON.stringify(body),
                 credentials: "same-origin",
                 signal: controller.signal
             });
             if (!response.ok) {
                 const detail = response.status === 404
                     ? "선택한 데모 자료를 찾을 수 없습니다."
-                    : response.status === 503
-                        ? "AI 요약을 만들지 못했습니다. 잠시 후 다시 시도해 주세요."
-                        : "요청이 실패했습니다 (HTTP " + response.status + ").";
+                    : response.status === 400
+                        ? "입력한 내용을 확인해 주세요. 2자 이상 " + MAX_QUERY_LENGTH + "자 이하로 입력할 수 있습니다."
+                        : response.status === 503
+                            ? "AI 응답을 만들지 못했습니다. 잠시 후 다시 시도해 주세요."
+                            : "요청이 실패했습니다 (HTTP " + response.status + ").";
                 throw new Error(detail);
             }
             return await response.json();
@@ -182,8 +205,8 @@
         elements.summaryContent.hidden = name !== "content";
     }
 
-    function evidenceNode(evidenceId) {
-        const activity = state.activityById.get(evidenceId);
+    function evidenceNode(evidenceId, lookup = state.activityById) {
+        const activity = lookup.get(evidenceId);
         if (!activity) return createElement("span", "missing-evidence", "근거 " + evidenceId);
         const url = safeSourceUrl(activity.sourceUrl);
         if (!url) return createElement("span", "missing-evidence", activityKind(activity.kind).label + " · " + activity.id);
@@ -275,6 +298,162 @@
             if (sequence === state.requestSequence) setControlsDisabled(false);
         }
     }
+
+    function showSimilarState(name) {
+        elements.similarLoading.hidden = name !== "loading";
+        elements.similarError.hidden = name !== "error";
+        elements.similarContent.hidden = name !== "content";
+    }
+
+    function currentQuery() {
+        return elements.similarQuery.value.trim().replace(/\s+/g, " ");
+    }
+
+    function updateSimilarControls() {
+        const length = elements.similarQuery.value.length;
+        elements.similarCount.textContent = length + " / " + MAX_QUERY_LENGTH;
+        elements.similarSubmit.disabled = state.similarLoading || currentQuery().length < 2;
+        elements.similarQuery.disabled = state.similarLoading;
+        for (const chip of elements.similarChips) chip.disabled = state.similarLoading;
+    }
+
+    function renderPointList(list, countLabel, points, lookup, emptyText) {
+        list.replaceChildren();
+        countLabel.textContent = points.length + "개";
+        if (!points.length) {
+            list.append(createElement("li", "no-points", emptyText));
+            return;
+        }
+        for (const point of points) {
+            const item = createElement("li");
+            item.append(createElement("div", null, point.text || "내용 없음"));
+            const links = createElement("div", "evidence-links");
+            const ids = Array.isArray(point.evidenceIds) ? point.evidenceIds : [];
+            for (const id of ids) links.append(evidenceNode(id, lookup));
+            item.append(links);
+            list.append(item);
+        }
+    }
+
+    function matchCard(match) {
+        const activity = match.activity || {};
+        const kind = activityKind(activity.kind);
+        const card = createElement("article", "activity-card match-card");
+
+        const icon = createElement("span", "source-icon" + (kind.github ? " is-github" : ""), kind.short);
+        icon.setAttribute("aria-hidden", "true");
+
+        const body = createElement("div", "activity-body");
+        const kicker = createElement("div", "activity-kicker");
+        kicker.append(
+            createElement("span", null, kind.label + " · " + activity.id),
+            createElement("span", null, activity.memberName || "가명 팀원"),
+            createElement("span", null, activity.status || "상태 없음"),
+            createElement("time", null, formatDate(activity.occurredAt, false))
+        );
+        body.append(kicker, createElement("h3", null, activity.title || "제목 없음"));
+        if (activity.details) body.append(createElement("p", null, activity.details));
+
+        const score = Math.max(0, Math.min(1, Number(match.score) || 0));
+        const meter = createElement("div", "score");
+        const bar = createElement("span", "score-bar");
+        const fill = createElement("span", "score-fill");
+        fill.style.width = Math.round(score * 100) + "%";
+        bar.append(fill);
+        bar.setAttribute("aria-hidden", "true");
+        meter.append(bar, createElement("span", "score-label", "유사도 " + score.toFixed(2)));
+        body.append(meter);
+
+        const url = safeSourceUrl(activity.sourceUrl);
+        const link = createElement(url ? "a" : "span", "source-link", url ? "원본 ↗" : "원본 링크 없음");
+        if (url) {
+            link.href = url;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.setAttribute("aria-label", (activity.title || "과거 업무") + " 원본을 새 창에서 열기");
+        }
+        card.append(icon, body, link);
+        return card;
+    }
+
+    function renderSimilar(result) {
+        const matches = Array.isArray(result.matches) ? result.matches : [];
+        const lookup = new Map(matches.filter((match) => match.activity).map((match) => [match.activity.id, match.activity]));
+        const explanation = result.explanation || {};
+
+        elements.similarOverview.textContent = explanation.overview || "설명을 만들지 못했습니다.";
+        elements.similarGenerated.textContent = "생성: " + formatDate(result.generatedAt, true)
+            + " · 설명 " + (explanation.generatedBy || "미확인") + " · 임베딩 " + (result.embeddingModel || "미확인");
+
+        renderPointList(elements.similarPoints, elements.similarPointsCount,
+            Array.isArray(explanation.similarWork) ? explanation.similarWork : [], lookup,
+            "관련성이 뚜렷한 과거 업무를 찾지 못했습니다.");
+        renderPointList(elements.similarApproach, elements.similarApproachCount,
+            Array.isArray(explanation.suggestedApproach) ? explanation.suggestedApproach : [], lookup,
+            "과거 업무에서 확인되는 해결 방법이 없습니다.");
+
+        elements.similarMatches.replaceChildren(...matches.map(matchCard));
+
+        const members = Array.isArray(result.experiencedMembers) ? result.experiencedMembers : [];
+        elements.similarMembers.replaceChildren();
+        if (!members.length) {
+            elements.similarMembers.append(createElement("li", "no-points", "관련 경험을 확인할 팀원이 없습니다."));
+        }
+        for (const member of members) {
+            const item = createElement("li", "member-item");
+            item.append(createElement("strong", null, member.memberName || member.memberId));
+            const links = createElement("div", "evidence-links");
+            for (const id of Array.isArray(member.evidenceIds) ? member.evidenceIds : []) links.append(evidenceNode(id, lookup));
+            item.append(links);
+            elements.similarMembers.append(item);
+        }
+        showSimilarState("content");
+    }
+
+    async function searchSimilar() {
+        const query = currentQuery();
+        if (query.length < 2 || state.similarLoading) return;
+        const sequence = ++state.similarSequence;
+        state.similarLoading = true;
+        updateSimilarControls();
+        showSimilarState("loading");
+        try {
+            const result = await requestJson(API_BASE + "/similar-work", SUMMARY_TIMEOUT_MS, { query });
+            if (sequence !== state.similarSequence) return;
+            renderSimilar(result);
+            elements.similarContent.focus({ preventScroll: true });
+        } catch (error) {
+            if (sequence !== state.similarSequence) return;
+            elements.similarErrorMessage.textContent = error.message;
+            showSimilarState("error");
+            elements.similarError.focus();
+        } finally {
+            if (sequence === state.similarSequence) {
+                state.similarLoading = false;
+                updateSimilarControls();
+            }
+        }
+    }
+
+    elements.similarQuery.addEventListener("input", updateSimilarControls);
+    elements.similarQuery.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            searchSimilar();
+        }
+    });
+    elements.similarForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        searchSimilar();
+    });
+    for (const chip of elements.similarChips) {
+        chip.addEventListener("click", () => {
+            elements.similarQuery.value = chip.dataset.example || "";
+            updateSimilarControls();
+            searchSimilar();
+        });
+    }
+    updateSimilarControls();
 
     elements.memberSelect.addEventListener("change", () => setControlsDisabled(false));
     elements.projectSelect.addEventListener("change", () => setControlsDisabled(false));
