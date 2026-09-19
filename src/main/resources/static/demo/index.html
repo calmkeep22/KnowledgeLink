@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="가명 Jira·GitHub 활동을 업무 맥락으로 정리하는 KnowledgeLink 해커톤 데모">
+    <title>KnowledgeLink · 업무 맥락 데모</title>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
+
+<header class="site-header">
+    <a class="brand" href="./" aria-label="KnowledgeLink 데모 홈">
+        <span class="brand-mark" aria-hidden="true">KL</span>
+        <span>KnowledgeLink</span>
+    </a>
+    <span class="demo-badge">가명 데이터 데모</span>
+</header>
+
+<main id="main-content" class="page-shell">
+    <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">Jira + GitHub 활동 요약</p>
+        <h1 id="hero-title">흩어진 활동 기록을<br><span>하나의 업무 맥락으로.</span></h1>
+        <p class="hero-copy">팀원이 이번 주에 한 일, 진행 중인 일, 막힌 지점과 다음 행동을 원본 근거와 함께 확인합니다.</p>
+        <div class="principles" aria-label="데모 원칙">
+            <span>AI 생성 표시</span>
+            <span>문장별 원본 근거</span>
+            <span>개인 순위 없음</span>
+        </div>
+    </section>
+
+    <section class="workspace" aria-labelledby="workspace-title">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Demo workspace</p>
+                <h2 id="workspace-title">업무 현황 보기</h2>
+            </div>
+            <button id="reload-button" class="button button-secondary" type="button">데이터 새로고침</button>
+        </div>
+
+        <div id="global-status" class="status-message" role="status" aria-live="polite"></div>
+
+        <div class="control-grid">
+            <div class="control-card">
+                <div class="control-copy">
+                    <span class="step-number" aria-hidden="true">01</span>
+                    <div>
+                        <label for="member-select">팀원별 업무</label>
+                        <p>선택한 팀원의 활동 맥락을 요약합니다.</p>
+                    </div>
+                </div>
+                <div class="control-actions">
+                    <select id="member-select" disabled>
+                        <option value="">활동을 불러오는 중…</option>
+                    </select>
+                    <button id="member-summary-button" class="button button-primary" type="button" disabled>팀원 요약 보기</button>
+                </div>
+            </div>
+
+            <div class="control-card">
+                <div class="control-copy">
+                    <span class="step-number" aria-hidden="true">02</span>
+                    <div>
+                        <label for="project-select">프로젝트 전체</label>
+                        <p>전체 현황 또는 인수인계 관점으로 정리합니다.</p>
+                    </div>
+                </div>
+                <div class="control-actions">
+                    <select id="project-select" disabled>
+                        <option value="">활동을 불러오는 중…</option>
+                    </select>
+                    <div class="button-pair">
+                        <button id="project-summary-button" class="button button-primary" type="button" disabled>프로젝트 요약</button>
+                        <button id="handoff-summary-button" class="button button-secondary" type="button" disabled>인수인계 요약</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="summary-region" class="summary-panel" aria-labelledby="summary-title" tabindex="-1">
+        <div class="empty-state" id="summary-empty">
+            <span class="empty-icon" aria-hidden="true">↗</span>
+            <h2 id="summary-title">요약할 대상을 선택해 주세요</h2>
+            <p>가명 활동을 선택하면 AI가 만든 업무 요약과 그 근거를 함께 보여 줍니다.</p>
+        </div>
+
+        <div id="summary-loading" class="loading-state" hidden role="status" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <div>
+                <strong>업무 맥락을 정리하고 있습니다</strong>
+                <p>Jira 이슈와 GitHub 활동을 연결하는 중입니다.</p>
+            </div>
+        </div>
+
+        <div id="summary-error" class="error-state" hidden role="alert" tabindex="-1">
+            <strong>요약을 불러오지 못했습니다</strong>
+            <p id="summary-error-message"></p>
+        </div>
+
+        <article id="summary-content" hidden>
+            <header class="summary-header">
+                <div>
+                    <div class="summary-meta">
+                        <span id="summary-mode" class="mode-badge"></span>
+                        <span class="ai-badge">AI 생성</span>
+                    </div>
+                    <h2 id="summary-content-title"></h2>
+                    <p id="summary-generated"></p>
+                </div>
+                <p class="verification-note">원본 링크에서 내용을 확인해 주세요.</p>
+            </header>
+            <div id="summary-sections" class="summary-grid"></div>
+        </article>
+    </section>
+
+    <section class="evidence-section" aria-labelledby="evidence-title">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Source evidence</p>
+                <h2 id="evidence-title">요약에 사용되는 활동</h2>
+            </div>
+            <p id="activity-count" class="activity-count"></p>
+        </div>
+        <div id="activity-error" class="error-state" hidden role="alert">
+            <strong>활동을 불러오지 못했습니다</strong>
+            <p id="activity-error-message"></p>
+        </div>
+        <div id="activity-list" class="activity-list" aria-live="polite"></div>
+    </section>
+
+    <aside class="privacy-note" aria-label="데모 데이터 안내">
+        <strong>공개 데모 안내</strong>
+        <p>이 화면의 인물, 프로젝트와 활동은 모두 가명·mock 데이터입니다. 개인 평가나 활동량 순위에 사용하지 않습니다.</p>
+    </aside>
+</main>
+
+<footer>
+    <span>KnowledgeLink Hackathon MVP</span>
+    <span>Mock activity → AI context → Evidence</span>
+</footer>
+
+<script src="./app.js" defer></script>
+</body>
+</html>
