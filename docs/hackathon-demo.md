@@ -7,6 +7,21 @@
 
 실제 Jira/GitHub OAuth, 실시간 동기화, DB·pgvector 저장, 개인 순위는 데모 범위에 포함하지 않는다. 과거 업무 벡터는 기동할 때 한 번 만들어 메모리에 둔다.
 
+## 과거 업무 출처
+
+유사 업무 검색 대상은 `KL_DEMO_PAST_WORK_SOURCE`로 고른다.
+
+| 값 | 자료 | 원본 링크 |
+|---|---|---|
+| `mock`(기본) | 가명 과거 업무 34건(이슈·PR 17쌍). 네트워크 없이 동작한다 | 열리지 않는 예시 주소 |
+| `apache` | 공개 Apache Jira에서 해결된 버그와, 이를 고친 GitHub 병합 PR | 실제 Jira·GitHub 페이지 |
+
+`apache` 모드는 저장소의 최근 병합 PR(기본 10페이지, 약 1,000건)에서 제목의 Jira 키(`KAFKA-12345:`)를 뽑고, 그 키로 Jira REST API v2를 익명 조회해 해결된 버그만 남긴다(기본 최대 200건). 이슈와 PR은 이 키로 서로 연결되고, 검색 결과에는 "이 이슈를 고친 PR"이 함께 표시된다. GitHub는 익명 호출(시간당 60회)로 충분하며 `GITHUB_TOKEN`을 주면 한도가 늘어난다. 대상 주소와 프로젝트는 운영자 설정(`KL_DEMO_JIRA_BASE_URL`, `KL_DEMO_JIRA_PROJECT`, `KL_DEMO_GITHUB_REPOSITORY`)으로만 바꾼다.
+
+첫 검색 전(기동 직후 색인할 때) 한 번 수집하고, 성공하면 `KL_DEMO_PAST_WORK_SNAPSHOT` 경로에 저장한다. 다음 기동에서 수집이 실패하면 저장본을, 저장본도 없으면 가명 예시 데이터를 쓴다. 화면 상단의 데이터 출처 줄에 실제 수집·저장본·예시 중 무엇인지와 수집 시각이 표시된다. 화면의 예시 질문도 출처마다 `application-demo.yml`의 `mock-examples`와 `apache.examples`에서 읽는다.
+
+팀 현황 요약은 개인의 한 주 업무를 다루므로 실존 인물 대신 가명 시나리오 데이터를 유지한다.
+
 ## 핵심 시나리오
 
 1. 저장소 루트에서 `./gradlew demoRun`(Windows는 `.\\gradlew.bat demoRun`)으로 DB 없는 데모 앱을 실행하고 `http://localhost:8080/demo/`를 연다.
@@ -43,7 +58,7 @@ curl -s -X POST http://localhost:8080/api/v1/demo/similar-work \
   -d '{"query":"결제 버튼을 두 번 누르면 주문이 두 번 생성돼요"}'
 ```
 
-응답의 `matches`는 유사도 순 과거 업무 상위 K개(`score`는 코사인 유사도)다. `explanation`의 `similarWork`·`suggestedApproach` 문장은 `evidenceIds`로 `matches`의 과거 업무만 가리키며, 서버가 이를 검증한다. `experiencedMembers`는 1위 유사도의 70% 이상인 결과의 담당자를 유사도 합으로 묶은 것으로, 이번 질의와 관련된 경험의 근거일 뿐 평가나 순위가 아니다.
+응답의 `matches`는 유사도 순 과거 업무 상위 K개(`score`는 코사인 유사도)다. `explanation`의 `similarWork`·`suggestedApproach` 문장은 `evidenceIds`로 `matches`의 과거 업무만 가리키며, 서버가 이를 검증한다. `experiencedMembers`는 1위 유사도의 70% 이상인 결과의 담당자를 묶어 각자 가장 높은 유사도 순으로 보인 것으로, 이번 질의와 관련된 경험의 근거일 뿐 평가나 순위가 아니다.
 
 ## AI 모드
 
@@ -101,9 +116,11 @@ KL_DEMO_AI_PROVIDER=bedrock
 AWS_REGION=<Bedrock 모델을 사용할 리전>
 BEDROCK_MODEL_ID=<모델 또는 inference profile ID>
 BEDROCK_EMBEDDING_MODEL_ID=<Titan Text Embeddings V2 모델 ID>
+KL_DEMO_PAST_WORK_SOURCE=apache
+KL_DEMO_PAST_WORK_SNAPSHOT=/var/lib/knowledgelink/past-work.json
 ```
 
-EC2에는 장기 AWS 액세스 키를 저장하지 않는다. 인스턴스 IAM Role에 선택한 생성·임베딩 모델 호출 권한만 부여한다. 기동 로그에서 `Similar work index ready: items=34`를 확인한 뒤 `/actuator/health`, `/demo/`, 활동 API, 세 종류의 요약 API, 유사 업무 검색 API를 순서대로 확인한다.
+EC2에는 장기 AWS 액세스 키를 저장하지 않는다. 인스턴스 IAM Role에 선택한 생성·임베딩 모델 호출 권한만 부여한다. 기동 로그에서 `Past work fetched from ...`과 `Similar work index ready`를 확인한 뒤 `/actuator/health`, `/demo/`, 활동 API, 세 종류의 요약 API, 유사 업무 검색 API를 순서대로 확인한다.
 
 ## 발표 전 점검
 

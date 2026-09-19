@@ -149,6 +149,44 @@ class SimilarWorkServiceTest {
                 () -> SimilarWorkService.cosine(new float[] {1}, new float[] {1, 0}));
     }
 
+    @Test
+    void 검색된_과거_업무에_연결된_이슈나_PR을_함께_돌려준다() {
+        PastWorkSource linkedSource = new PastWorkSource() {
+            @Override
+            public List<DemoActivity> findAll() {
+                return pastWork;
+            }
+
+            @Override
+            public Map<String, List<String>> links() {
+                return Map.of("p-1", List.of("p-4"), "p-4", List.of("p-1"));
+            }
+        };
+        SimilarWorkService service = new SimilarWorkService(linkedSource, embedder(), explainer(evidenceOfTop()),
+                new SimilarWorkProperties(1, 20, 10), () -> 0L);
+
+        SimilarWorkResult result = service.search("결제가 두 번 됨");
+
+        // 연결된 p-4는 검색 결과(top 1)에 없어도 관련 업무로 붙는다.
+        assertEquals(List.of("p-1"), result.matches().stream().map(match -> match.activity().id()).toList());
+        assertEquals(List.of("p-4"), result.related().get("p-1").stream().map(DemoActivity::id).toList());
+    }
+
+    @Test
+    void 담당자_없는_과거_업무는_관련_팀원에서_뺀다() {
+        List<DemoActivity> withUnassigned = List.of(
+                new DemoActivity("p-1", "project-a", SimilarWorkService.UNASSIGNED_MEMBER_ID, "담당자 없음",
+                        ActivityKind.JIRA_ISSUE, "결제 중복", "DONE", Instant.parse("2026-01-01T00:00:00Z"),
+                        "https://example.invalid/p-1", ""),
+                activity("p-2", "member-a", "김하늘", "결제 멱등성 PR"));
+        SimilarWorkService service = new SimilarWorkService(() -> withUnassigned, embedder(), explainer(evidenceOfTop()),
+                new SimilarWorkProperties(2, 20, 10), () -> 0L);
+
+        SimilarWorkResult result = service.search("결제가 두 번 됨");
+
+        assertEquals(List.of("member-a"), result.experiencedMembers().stream().map(member -> member.memberId()).toList());
+    }
+
     private SimilarWorkService service(int topK, int perMinute, Function<SimilarWorkRequest, SimilarWorkExplanation> explain) {
         return new SimilarWorkService(() -> pastWork, embedder(), explainer(explain),
                 new SimilarWorkProperties(topK, perMinute, 10), () -> 0L);

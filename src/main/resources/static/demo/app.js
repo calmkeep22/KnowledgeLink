@@ -36,7 +36,9 @@
         similarQuery: $("#similar-query"),
         similarCount: $("#similar-count"),
         similarSubmit: $("#similar-submit"),
-        similarChips: document.querySelectorAll(".example-chips .chip"),
+        exampleRow: $(".example-row"),
+        exampleChips: $("#example-chips"),
+        sourceLine: $("#source-line"),
         similarLoading: $("#similar-loading"),
         similarError: $("#similar-error"),
         similarErrorMessage: $("#similar-error-message"),
@@ -370,7 +372,7 @@
         elements.similarCount.textContent = elements.similarQuery.value.length + " / " + MAX_QUERY_LENGTH;
         elements.similarSubmit.disabled = state.similarLoading || currentQuery().length < 2;
         elements.similarQuery.disabled = state.similarLoading;
-        for (const chip of elements.similarChips) chip.disabled = state.similarLoading;
+        for (const chip of elements.exampleChips.querySelectorAll(".chip")) chip.disabled = state.similarLoading;
     }
 
     function renderPointList(list, countLabel, points, lookup, emptyText) {
@@ -386,7 +388,28 @@
         }));
     }
 
-    function issueRow(match) {
+    function relatedLine(activity, relatedItems) {
+        if (!relatedItems.length) return null;
+        const line = createElement("div", "related-line");
+        const label = activity.kind === "JIRA_ISSUE" ? "이 이슈를 고친 PR" : "이 PR이 고친 이슈";
+        line.append(createElement("span", "related-label", label));
+        for (const item of relatedItems) {
+            const url = safeSourceUrl(item.sourceUrl);
+            const node = createElement(url ? "a" : "span", "related-link");
+            node.append(typeIcon(item.kind), createElement("span", "related-id", item.id),
+                createElement("span", "related-title", item.title || ""));
+            if (url) {
+                node.href = url;
+                node.target = "_blank";
+                node.rel = "noopener noreferrer";
+                node.setAttribute("aria-label", (item.title || item.id) + " 원본을 새 창에서 열기");
+            }
+            line.append(node);
+        }
+        return line;
+    }
+
+    function issueRow(match, related) {
         const activity = match.activity || {};
         const row = createElement("article", "issue-row");
 
@@ -406,6 +429,8 @@
         bar.setAttribute("aria-hidden", "true");
         meter.append(bar, createElement("span", "score-label", "유사도 " + score.toFixed(2)));
         main.append(meter);
+        const linked = relatedLine(activity, Array.isArray(related[activity.id]) ? related[activity.id] : []);
+        if (linked) main.append(linked);
 
         const side = createElement("div", "issue-side");
         side.append(statusLozenge(activity.status), sourceLink(activity, "원본 ↗"));
@@ -415,7 +440,11 @@
 
     function renderSimilar(result) {
         const matches = Array.isArray(result.matches) ? result.matches : [];
+        const related = result.related && typeof result.related === "object" ? result.related : {};
         const lookup = new Map(matches.filter((match) => match.activity).map((match) => [match.activity.id, match.activity]));
+        for (const items of Object.values(related)) {
+            for (const item of Array.isArray(items) ? items : []) if (!lookup.has(item.id)) lookup.set(item.id, item);
+        }
         const explanation = result.explanation || {};
 
         elements.similarOverview.textContent = explanation.overview || "설명을 만들지 못했습니다.";
@@ -429,7 +458,7 @@
             Array.isArray(explanation.suggestedApproach) ? explanation.suggestedApproach : [], lookup,
             "과거 업무에서 확인되는 해결 방법이 없습니다.");
 
-        elements.similarMatches.replaceChildren(...matches.map(issueRow));
+        elements.similarMatches.replaceChildren(...matches.map((match) => issueRow(match, related)));
 
         const members = Array.isArray(result.experiencedMembers) ? result.experiencedMembers : [];
         if (!members.length) {
@@ -472,6 +501,43 @@
         }
     }
 
+    // ---------- 데이터 출처와 예시 질문 ----------
+
+    function sourceDescription(info) {
+        const parts = [];
+        if (info.issueCount) parts.push("이슈 " + info.issueCount + "건");
+        if (info.pullRequestCount) parts.push("이를 고친 PR " + info.pullRequestCount + "건");
+        let text = "데이터 출처 · " + (info.label || "과거 업무");
+        if (parts.length) text += " — " + parts.join(", ");
+        if (info.fetchedAt) text += " · " + formatDate(info.fetchedAt, true) + " 수집";
+        if (info.sourceType === "snapshot") text += "(저장본)";
+        return text;
+    }
+
+    async function loadSourceInfo() {
+        try {
+            const info = await requestJson(API_BASE + "/past-work/info", SUMMARY_TIMEOUT_MS);
+            const examples = Array.isArray(info.examples) ? info.examples : [];
+            elements.exampleChips.replaceChildren(...examples
+                .filter((example) => example && example.query)
+                .map((example) => {
+                    const chip = createElement("button", "chip", example.label || example.query);
+                    chip.type = "button";
+                    chip.dataset.example = example.query;
+                    chip.title = example.query;
+                    return chip;
+                }));
+            elements.exampleRow.hidden = !elements.exampleChips.children.length;
+            elements.sourceLine.textContent = sourceDescription(info);
+            elements.sourceLine.classList.toggle("is-live", info.sourceType === "live" || info.sourceType === "snapshot");
+            elements.sourceLine.hidden = false;
+            updateSimilarControls();
+        } catch (_) {
+            elements.exampleRow.hidden = true;
+            elements.sourceLine.hidden = true;
+        }
+    }
+
     // ---------- 이벤트 ----------
 
     elements.similarQuery.addEventListener("input", updateSimilarControls);
@@ -485,13 +551,13 @@
         event.preventDefault();
         searchSimilar();
     });
-    for (const chip of elements.similarChips) {
-        chip.addEventListener("click", () => {
-            elements.similarQuery.value = chip.dataset.example || "";
-            updateSimilarControls();
-            searchSimilar();
-        });
-    }
+    elements.exampleChips.addEventListener("click", (event) => {
+        const chip = event.target.closest(".chip");
+        if (!chip || chip.disabled) return;
+        elements.similarQuery.value = chip.dataset.example || "";
+        updateSimilarControls();
+        searchSimilar();
+    });
 
     elements.memberSelect.addEventListener("change", () => setControlsDisabled(false));
     elements.projectSelect.addEventListener("change", () => setControlsDisabled(false));
@@ -510,5 +576,6 @@
     });
 
     updateSimilarControls();
+    loadSourceInfo();
     loadActivities(false);
 }());

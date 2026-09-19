@@ -4,6 +4,7 @@ import com.knowledgelink.common.error.ApiException;
 import com.knowledgelink.common.error.ErrorCode;
 import com.knowledgelink.demo.domain.DemoActivity;
 import com.knowledgelink.demo.domain.ExperiencedMember;
+import com.knowledgelink.demo.domain.PastWorkSourceInfo;
 import com.knowledgelink.demo.domain.SimilarWorkExplanation;
 import com.knowledgelink.demo.domain.SimilarWorkMatch;
 import com.knowledgelink.demo.domain.SimilarWorkResult;
@@ -14,6 +15,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
@@ -27,7 +29,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 새 업무 설명과 비슷한 과거 업무를 임베딩 코사인 유사도로 찾고, 찾은 자료만 근거로 설명을 붙인다.
- * 과거 업무 벡터는 DB 없이 메모리에 둔다. 데모 fixture가 수십 건이라 전수 비교로 충분하다.
+ * 과거 업무 벡터는 DB 없이 메모리에 둔다. 데모 자료가 수백 건이라 전수 비교로 충분하다.
  */
 @Slf4j
 @Service
@@ -37,6 +39,8 @@ public class SimilarWorkService {
     static final int MAX_QUERY_LENGTH = 500;
     private static final int MAX_EXPERIENCED_MEMBERS = 3;
     private static final double RELEVANT_SCORE_RATIO = 0.7;
+    /** 담당자가 없는 원본 이슈에 쓰는 memberId. 관련 팀원 집계에서 뺀다. */
+    public static final String UNASSIGNED_MEMBER_ID = "unassigned";
 
     private final PastWorkSource pastWorkSource;
     private final TextEmbedder embedder;
@@ -122,7 +126,33 @@ public class SimilarWorkService {
                 experiencedMembers(matches),
                 explanation,
                 embedder.modelId(),
-                Instant.now());
+                Instant.now(),
+                relatedWork(matches, indexed));
+    }
+
+    public PastWorkSourceInfo sourceInfo() {
+        return pastWorkSource.info();
+    }
+
+    /** 검색된 이슈를 고친 PR, 검색된 PR이 고친 이슈를 붙인다. 연결 상대가 검색 결과에 없어도 보여 준다. */
+    private Map<String, List<DemoActivity>> relatedWork(List<SimilarWorkMatch> matches, List<IndexedWork> indexed) {
+        Map<String, List<String>> links = pastWorkSource.links();
+        if (links.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, DemoActivity> byId = indexed.stream()
+                .collect(Collectors.toMap(work -> work.activity().id(), IndexedWork::activity, (first, second) -> first));
+        Map<String, List<DemoActivity>> related = new LinkedHashMap<>();
+        for (SimilarWorkMatch match : matches) {
+            List<DemoActivity> linked = links.getOrDefault(match.activity().id(), List.of()).stream()
+                    .map(byId::get)
+                    .filter(Objects::nonNull)
+                    .toList();
+            if (!linked.isEmpty()) {
+                related.put(match.activity().id(), linked);
+            }
+        }
+        return related;
     }
 
     private List<IndexedWork> ensureIndex() {
@@ -182,7 +212,8 @@ public class SimilarWorkService {
     }
 
     /**
-     * 담당자별로 검색 결과 유사도를 더한다. 이번 질의에 대한 관련 경험의 근거일 뿐 사람의 성과 지표가 아니다.
+     * 담당자별로 검색 결과 중 가장 높은 유사도로 정렬한다. 합산하면 주제가 조금씩 다른 업무를 여러 건 맡은 사람이
+     * 정확히 같은 문제를 푼 사람보다 앞설 수 있다. 이번 질의에 대한 관련 경험의 근거일 뿐 사람의 성과 지표가 아니다.
      * 1위의 70%에 못 미치는 결과는 주제가 다른 자료일 가능성이 커서 담당자 집계에서 뺀다.
      * Titan 기준으로 같은 주제는 0.5~0.65, 다른 주제도 0.3 안팎이 나와 절반 기준으로는 걸러지지 않았다.
      */
@@ -190,12 +221,13 @@ public class SimilarWorkService {
         double threshold = matches.getFirst().score() * RELEVANT_SCORE_RATIO;
         Map<String, List<SimilarWorkMatch>> byMember = matches.stream()
                 .filter(match -> match.score() > 0 && match.score() >= threshold)
+                .filter(match -> !UNASSIGNED_MEMBER_ID.equals(match.activity().memberId()))
                 .collect(Collectors.groupingBy(match -> match.activity().memberId(), LinkedHashMap::new, Collectors.toList()));
         return byMember.values().stream()
                 .map(memberMatches -> new ExperiencedMember(
                         memberMatches.getFirst().activity().memberId(),
                         memberMatches.getFirst().activity().memberName(),
-                        round(memberMatches.stream().mapToDouble(SimilarWorkMatch::score).sum()),
+                        memberMatches.stream().mapToDouble(SimilarWorkMatch::score).max().orElse(0),
                         memberMatches.stream().map(match -> match.activity().id()).toList()))
                 .sorted(Comparator.comparingDouble(ExperiencedMember::relevance).reversed()
                         .thenComparing(ExperiencedMember::memberId))
