@@ -53,5 +53,5 @@ kl:
             query: 인증이 만료돼서 재인증에 실패하면 컨슈머 CPU 사용률이 100%로 치솟아요
           - label: DNS 실패로 클라이언트 종료
             query: 부트스트랩 서버 DNS를 잠깐 못 찾으면 클라이언트가 바로 실패해 버려요
-          - label: 동시 처리 중 데드락
-            query: 스트림 처리 중에 조회 요청과 상태 저장소 업데이트가 겹치면 멈춰 버려요
+          - label: 조회·업데이트 동시 데드락
+            query: Kafka Streams에서 Interactive Query와 상태 저장소 업데이트가 동시에 실행되면 deadlock이 걸려요

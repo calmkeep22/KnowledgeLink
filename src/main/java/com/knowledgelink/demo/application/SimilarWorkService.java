@@ -29,7 +29,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 새 업무 설명과 비슷한 과거 업무를 임베딩 코사인 유사도로 찾고, 찾은 자료만 근거로 설명을 붙인다.
- * 과거 업무 벡터는 DB 없이 메모리에 둔다. 데모 fixture가 수십 건이라 전수 비교로 충분하다.
+ * 과거 업무 벡터는 DB 없이 메모리에 둔다. 데모 자료가 수백 건이라 전수 비교로 충분하다.
  */
 @Slf4j
 @Service
@@ -212,7 +212,8 @@ public class SimilarWorkService {
     }
 
     /**
-     * 담당자별로 검색 결과 유사도를 더한다. 이번 질의에 대한 관련 경험의 근거일 뿐 사람의 성과 지표가 아니다.
+     * 담당자별로 검색 결과 중 가장 높은 유사도로 정렬한다. 합산하면 주제가 조금씩 다른 업무를 여러 건 맡은 사람이
+     * 정확히 같은 문제를 푼 사람보다 앞설 수 있다. 이번 질의에 대한 관련 경험의 근거일 뿐 사람의 성과 지표가 아니다.
      * 1위의 70%에 못 미치는 결과는 주제가 다른 자료일 가능성이 커서 담당자 집계에서 뺀다.
      * Titan 기준으로 같은 주제는 0.5~0.65, 다른 주제도 0.3 안팎이 나와 절반 기준으로는 걸러지지 않았다.
      */
@@ -226,7 +227,7 @@ public class SimilarWorkService {
                 .map(memberMatches -> new ExperiencedMember(
                         memberMatches.getFirst().activity().memberId(),
                         memberMatches.getFirst().activity().memberName(),
-                        round(memberMatches.stream().mapToDouble(SimilarWorkMatch::score).sum()),
+                        memberMatches.stream().mapToDouble(SimilarWorkMatch::score).max().orElse(0),
                         memberMatches.stream().map(match -> match.activity().id()).toList()))
                 .sorted(Comparator.comparingDouble(ExperiencedMember::relevance).reversed()
                         .thenComparing(ExperiencedMember::memberId))

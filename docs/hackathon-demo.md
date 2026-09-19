@@ -58,7 +58,7 @@ curl -s -X POST http://localhost:8080/api/v1/demo/similar-work \
   -d '{"query":"결제 버튼을 두 번 누르면 주문이 두 번 생성돼요"}'
 ```
 
-응답의 `matches`는 유사도 순 과거 업무 상위 K개(`score`는 코사인 유사도)다. `explanation`의 `similarWork`·`suggestedApproach` 문장은 `evidenceIds`로 `matches`의 과거 업무만 가리키며, 서버가 이를 검증한다. `experiencedMembers`는 1위 유사도의 70% 이상인 결과의 담당자를 유사도 합으로 묶은 것으로, 이번 질의와 관련된 경험의 근거일 뿐 평가나 순위가 아니다.
+응답의 `matches`는 유사도 순 과거 업무 상위 K개(`score`는 코사인 유사도)다. `explanation`의 `similarWork`·`suggestedApproach` 문장은 `evidenceIds`로 `matches`의 과거 업무만 가리키며, 서버가 이를 검증한다. `experiencedMembers`는 1위 유사도의 70% 이상인 결과의 담당자를 묶어 각자 가장 높은 유사도 순으로 보인 것으로, 이번 질의와 관련된 경험의 근거일 뿐 평가나 순위가 아니다.
 
 ## AI 모드
 
