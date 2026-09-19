@@ -7,7 +7,7 @@
     <title>KnowledgeLink · 이 문제, 누가 이미 풀었을까?</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-    <link rel="stylesheet" href="./styles.css?v=20260919-3">
+    <link rel="stylesheet" href="./styles.css?v=20260919-4">
 </head>
 <body>
 <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
@@ -86,9 +86,10 @@
                         <span id="similar-generated" class="meta"></span>
                     </div>
                     <p id="similar-overview" class="answer-overview"></p>
+                    <p id="similar-expanded" class="expanded-query" hidden></p>
                 </header>
 
-                <div class="answer-grid">
+                <div id="similar-answer-grid" class="answer-grid">
                     <section class="answer-block">
                         <h3>비슷한 점 <span id="similar-points-count" class="count"></span></h3>
                         <ul id="similar-points" class="point-list"></ul>
@@ -107,7 +108,7 @@
                         </div>
                         <div id="similar-matches" class="issue-list"></div>
                     </section>
-                    <aside class="people" aria-labelledby="similar-members-title">
+                    <aside id="similar-people" class="people" aria-labelledby="similar-members-title">
                         <h3 id="similar-members-title">이 주제를 다뤄 본 팀원</h3>
                         <p class="people-note">검색된 과거 업무의 담당자입니다. 평가나 순위가 아닙니다.</p>
                         <ul id="similar-members" class="people-list"></ul>
@@ -244,6 +245,6 @@
     </div>
 </footer>
 
-<script src="./app.js?v=20260919-3" defer></script>
+<script src="./app.js?v=20260919-4" defer></script>
 </body>
 </html>
