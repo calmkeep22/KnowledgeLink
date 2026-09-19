@@ -3,7 +3,6 @@ package com.knowledgelink.demo.infrastructure.ai;
 import com.knowledgelink.demo.application.ActivitySummaryGenerator;
 import com.knowledgelink.demo.application.SummaryGenerationRequest;
 import com.knowledgelink.demo.domain.DemoActivity;
-import com.knowledgelink.demo.domain.SummaryMode;
 import com.knowledgelink.demo.domain.SummaryPoint;
 import com.knowledgelink.demo.domain.WorkSummary;
 import java.time.Instant;
@@ -46,7 +45,7 @@ public final class FakeActivitySummaryGenerator implements ActivitySummaryGenera
                 "demo-summary-v1",
                 request.mode(),
                 request.subjectId(),
-                title(request.mode(), request.subjectName()),
+                request.mode().titleFor(request.subjectName()),
                 completed,
                 inProgress,
                 blockers,
@@ -68,13 +67,5 @@ public final class FakeActivitySummaryGenerator implements ActivitySummaryGenera
     private static boolean isBlocked(String status) {
         return status.contains("blocked") || status.contains("blocker") || status.contains("차단")
                 || status.contains("막힘");
-    }
-
-    private static String title(SummaryMode mode, String subjectName) {
-        return switch (mode) {
-            case MEMBER -> subjectName + "의 이번 주 업무 요약";
-            case PROJECT -> subjectName + " 프로젝트 현황 요약";
-            case HANDOFF -> subjectName + " 인수인계 요약";
-        };
     }
 }

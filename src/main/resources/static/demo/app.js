@@ -5,55 +5,60 @@
     // 외부 AI 호출은 서버 타임아웃(Bedrock 기본 30초)보다 화면이 먼저 포기하지 않도록 여유를 둔다.
     const SUMMARY_TIMEOUT_MS = 45000;
     const MAX_QUERY_LENGTH = 500;
+    const AVATAR_COLORS = ["#1868db", "#803fa5", "#4c6b1f", "#c75300", "#ae2e24", "#206a83", "#5e4db2"];
     const state = { activities: [], activityById: new Map(), requestSequence: 0, similarSequence: 0, similarLoading: false };
 
+    const $ = (selector) => document.querySelector(selector);
     const elements = {
-        globalStatus: document.querySelector("#global-status"),
-        reloadButton: document.querySelector("#reload-button"),
-        memberSelect: document.querySelector("#member-select"),
-        projectSelect: document.querySelector("#project-select"),
-        memberButton: document.querySelector("#member-summary-button"),
-        projectButton: document.querySelector("#project-summary-button"),
-        handoffButton: document.querySelector("#handoff-summary-button"),
-        summaryRegion: document.querySelector("#summary-region"),
-        summaryEmpty: document.querySelector("#summary-empty"),
-        summaryLoading: document.querySelector("#summary-loading"),
-        summaryError: document.querySelector("#summary-error"),
-        summaryErrorMessage: document.querySelector("#summary-error-message"),
-        summaryContent: document.querySelector("#summary-content"),
-        summaryMode: document.querySelector("#summary-mode"),
-        summaryTitle: document.querySelector("#summary-content-title"),
-        summaryGenerated: document.querySelector("#summary-generated"),
-        summarySections: document.querySelector("#summary-sections"),
-        activityList: document.querySelector("#activity-list"),
-        activityCount: document.querySelector("#activity-count"),
-        activityError: document.querySelector("#activity-error"),
-        activityErrorMessage: document.querySelector("#activity-error-message"),
-        similarForm: document.querySelector("#similar-form"),
-        similarQuery: document.querySelector("#similar-query"),
-        similarCount: document.querySelector("#similar-count"),
-        similarSubmit: document.querySelector("#similar-submit"),
-        similarChips: document.querySelectorAll("#similar-form .chip"),
-        similarLoading: document.querySelector("#similar-loading"),
-        similarError: document.querySelector("#similar-error"),
-        similarErrorMessage: document.querySelector("#similar-error-message"),
-        similarContent: document.querySelector("#similar-content"),
-        similarOverview: document.querySelector("#similar-overview"),
-        similarGenerated: document.querySelector("#similar-generated"),
-        similarPoints: document.querySelector("#similar-points"),
-        similarPointsCount: document.querySelector("#similar-points-count"),
-        similarApproach: document.querySelector("#similar-approach"),
-        similarApproachCount: document.querySelector("#similar-approach-count"),
-        similarMatches: document.querySelector("#similar-matches"),
-        similarMembers: document.querySelector("#similar-members")
+        globalStatus: $("#global-status"),
+        reloadButton: $("#reload-button"),
+        memberSelect: $("#member-select"),
+        projectSelect: $("#project-select"),
+        memberButton: $("#member-summary-button"),
+        projectButton: $("#project-summary-button"),
+        handoffButton: $("#handoff-summary-button"),
+        summaryRegion: $("#summary-region"),
+        summaryEmpty: $("#summary-empty"),
+        summaryLoading: $("#summary-loading"),
+        summaryError: $("#summary-error"),
+        summaryErrorMessage: $("#summary-error-message"),
+        summaryContent: $("#summary-content"),
+        summaryMode: $("#summary-mode"),
+        summaryTitle: $("#summary-content-title"),
+        summaryGenerated: $("#summary-generated"),
+        summarySections: $("#summary-sections"),
+        activityList: $("#activity-list"),
+        activityCount: $("#activity-count"),
+        activityError: $("#activity-error"),
+        activityErrorMessage: $("#activity-error-message"),
+        similarRegion: $("#similar-region"),
+        similarForm: $("#similar-form"),
+        similarQuery: $("#similar-query"),
+        similarCount: $("#similar-count"),
+        similarSubmit: $("#similar-submit"),
+        similarChips: document.querySelectorAll(".example-chips .chip"),
+        similarLoading: $("#similar-loading"),
+        similarError: $("#similar-error"),
+        similarErrorMessage: $("#similar-error-message"),
+        similarContent: $("#similar-content"),
+        similarOverview: $("#similar-overview"),
+        similarGenerated: $("#similar-generated"),
+        similarPoints: $("#similar-points"),
+        similarPointsCount: $("#similar-points-count"),
+        similarApproach: $("#similar-approach"),
+        similarApproachCount: $("#similar-approach-count"),
+        similarMatches: $("#similar-matches"),
+        similarMembers: $("#similar-members")
     };
 
-    const sectionDefinitions = [
-        { key: "completed", title: "완료한 일", empty: "확인된 완료 항목이 없습니다." },
+    const boardColumns = [
+        { key: "completed", title: "완료", empty: "확인된 완료 항목이 없습니다." },
         { key: "inProgress", title: "진행 중", empty: "확인된 진행 항목이 없습니다." },
-        { key: "blockers", title: "막힌 점", empty: "활동 기록에서 확인된 막힌 점이 없습니다.", className: "is-blocker" },
-        { key: "nextActions", title: "다음 행동", empty: "근거로 제안할 다음 행동이 없습니다." }
+        { key: "blockers", title: "막힘", empty: "막힌 점이 없습니다.", blocker: true },
+        { key: "nextActions", title: "다음 행동", empty: "제안할 다음 행동이 없습니다." }
     ];
+
+    // ---------- 공통 렌더링 도우미 ----------
 
     function createElement(tag, className, text) {
         const element = document.createElement(tag);
@@ -85,48 +90,78 @@
 
     function activityKind(kind) {
         const labels = {
-            JIRA_ISSUE: { short: "Jira", label: "Jira 이슈", github: false },
-            GITHUB_PULL_REQUEST: { short: "PR", label: "GitHub PR", github: true },
-            GITHUB_COMMIT: { short: "Git", label: "GitHub 커밋", github: true }
+            JIRA_ISSUE: { short: "J", label: "Jira 이슈", className: "type-jira" },
+            GITHUB_PULL_REQUEST: { short: "PR", label: "GitHub PR", className: "type-pr" },
+            GITHUB_COMMIT: { short: "C", label: "GitHub 커밋", className: "type-commit" }
         };
-        return labels[kind] || { short: "Log", label: kind || "활동", github: false };
+        return labels[kind] || { short: "?", label: kind || "활동", className: "type-jira" };
     }
 
-    function setControlsDisabled(disabled) {
-        const hasActivities = state.activities.length > 0;
-        elements.memberSelect.disabled = disabled || !hasActivities;
-        elements.projectSelect.disabled = disabled || !hasActivities;
-        elements.memberButton.disabled = disabled || !elements.memberSelect.value;
-        elements.projectButton.disabled = disabled || !elements.projectSelect.value;
-        elements.handoffButton.disabled = disabled || !elements.projectSelect.value;
-        elements.reloadButton.disabled = disabled;
+    function typeIcon(kind) {
+        const info = activityKind(kind);
+        const icon = createElement("span", "type-icon " + info.className, info.short);
+        icon.title = info.label;
+        icon.setAttribute("aria-label", info.label);
+        return icon;
     }
 
-    function populateSelect(select, values, placeholder) {
-        select.replaceChildren();
-        if (!values.length) {
-            const option = new Option(placeholder, "");
-            select.append(option);
-            return;
+    function statusLozenge(status) {
+        const value = String(status || "").toUpperCase();
+        let className = "loz-default";
+        if (value.includes("MERGED")) className = "loz-merged";
+        else if (/(DONE|CLOSED|RESOLVED|COMMITTED)/.test(value)) className = "loz-success";
+        else if (/(BLOCK)/.test(value)) className = "loz-danger";
+        else if (/(PROGRESS|REVIEW|OPEN)/.test(value)) className = "loz-progress";
+        return createElement("span", "lozenge " + className, value.replace(/_/g, " ") || "상태 없음");
+    }
+
+    function avatar(name, small) {
+        const label = String(name || "?");
+        let hash = 0;
+        for (const character of label) hash = (hash * 31 + character.codePointAt(0)) >>> 0;
+        const element = createElement("span", "avatar" + (small ? " avatar-sm" : ""), Array.from(label)[0] || "?");
+        element.style.background = AVATAR_COLORS[hash % AVATAR_COLORS.length];
+        element.setAttribute("aria-hidden", "true");
+        return element;
+    }
+
+    function assignee(name) {
+        const wrapper = createElement("span", "assignee");
+        wrapper.append(avatar(name, true), createElement("span", null, name || "가명 팀원"));
+        return wrapper;
+    }
+
+    function sourceLink(activity, label) {
+        const url = safeSourceUrl(activity.sourceUrl);
+        const link = createElement(url ? "a" : "span", "source-link", url ? label : "원본 없음");
+        if (url) {
+            link.href = url;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.setAttribute("aria-label", (activity.title || "활동") + " 원본을 새 창에서 열기");
         }
-        for (const value of values) select.append(new Option(value.label, value.id));
+        return link;
     }
 
-    function getMembers(activities) {
-        const members = new Map();
-        for (const activity of activities) {
-            if (activity.memberId && !members.has(activity.memberId)) {
-                members.set(activity.memberId, activity.memberName || activity.memberId);
-            }
-        }
-        return Array.from(members, ([id, label]) => ({ id, label }))
-            .sort((a, b) => a.label.localeCompare(b.label, "ko"));
+    function evidenceNode(evidenceId, lookup = state.activityById) {
+        const activity = lookup.get(evidenceId);
+        if (!activity) return createElement("span", "missing-evidence", "근거 " + evidenceId);
+        const label = activityKind(activity.kind).label + " · " + activity.id;
+        const url = safeSourceUrl(activity.sourceUrl);
+        if (!url) return createElement("span", "missing-evidence", label);
+        const link = createElement("a", "evidence-link", label + " ↗");
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.title = activity.title || "";
+        link.setAttribute("aria-label", (activity.title || "근거") + " 근거를 새 창에서 열기");
+        return link;
     }
 
-    function getProjects(activities) {
-        return Array.from(new Set(activities.map((item) => item.projectId).filter(Boolean)))
-            .sort((a, b) => a.localeCompare(b, "ko"))
-            .map((id) => ({ id, label: id }));
+    function evidenceLinks(ids, lookup) {
+        const links = createElement("div", "evidence-links");
+        for (const id of Array.isArray(ids) ? ids : []) links.append(evidenceNode(id, lookup));
+        return links;
     }
 
     async function requestJson(path, timeoutMs = 15000, body) {
@@ -154,48 +189,91 @@
             }
             return await response.json();
         } catch (error) {
-            if (error.name === "AbortError") throw new Error("요청 시간이 초과되었습니다. 서버 상태를 확인해 주세요.");
+            if (error.name === "AbortError") throw new Error("요청 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.");
             throw error;
         } finally {
             window.clearTimeout(timeoutId);
         }
     }
 
+    // ---------- 팀 현황 ----------
+
+    function setControlsDisabled(disabled) {
+        const hasActivities = state.activities.length > 0;
+        elements.memberSelect.disabled = disabled || !hasActivities;
+        elements.projectSelect.disabled = disabled || !hasActivities;
+        elements.memberButton.disabled = disabled || !elements.memberSelect.value;
+        elements.projectButton.disabled = disabled || !elements.projectSelect.value;
+        elements.handoffButton.disabled = disabled || !elements.projectSelect.value;
+        elements.reloadButton.disabled = disabled;
+    }
+
+    function populateSelect(select, values, placeholder) {
+        select.replaceChildren();
+        if (!values.length) {
+            select.append(new Option(placeholder, ""));
+            return;
+        }
+        for (const value of values) select.append(new Option(value.label, value.id));
+    }
+
+    function getMembers(activities) {
+        const members = new Map();
+        for (const activity of activities) {
+            if (activity.memberId && !members.has(activity.memberId)) {
+                members.set(activity.memberId, activity.memberName || activity.memberId);
+            }
+        }
+        return Array.from(members, ([id, label]) => ({ id, label }))
+            .sort((a, b) => a.label.localeCompare(b.label, "ko"));
+    }
+
+    function getProjects(activities) {
+        return Array.from(new Set(activities.map((item) => item.projectId).filter(Boolean)))
+            .sort((a, b) => a.localeCompare(b, "ko"))
+            .map((id) => ({ id, label: id }));
+    }
+
     function renderActivities() {
-        elements.activityList.replaceChildren();
-        elements.activityCount.textContent = state.activities.length + "개 활동 · 최신순";
+        const rows = [];
+        const head = createElement("div", "table-row table-head");
+        head.setAttribute("role", "presentation");
+        head.append(
+            createElement("span", null, ""),
+            createElement("span", null, "제목"),
+            createElement("span", "col-assignee", "담당자"),
+            createElement("span", null, "상태"),
+            createElement("span", "col-date", "날짜"),
+            createElement("span", "col-link", "")
+        );
+        rows.push(head);
 
         for (const activity of state.activities) {
-            const kind = activityKind(activity.kind);
-            const card = createElement("article", "activity-card");
-            card.id = "activity-" + String(activity.id).replace(/[^a-zA-Z0-9_-]/g, "-");
-
-            const icon = createElement("span", "source-icon" + (kind.github ? " is-github" : ""), kind.short);
-            icon.setAttribute("aria-hidden", "true");
-
-            const body = createElement("div", "activity-body");
-            const kicker = createElement("div", "activity-kicker");
-            kicker.append(
-                createElement("span", null, kind.label),
-                createElement("span", null, activity.memberName || "가명 팀원"),
-                createElement("span", null, activity.status || "상태 없음"),
-                createElement("time", null, formatDate(activity.occurredAt, true))
+            const row = createElement("div", "table-row");
+            row.setAttribute("role", "listitem");
+            const title = createElement("div", "table-title");
+            title.append(
+                createElement("strong", null, activity.title || "제목 없음"),
+                createElement("span", null, activity.id + (activity.details ? " · " + activity.details : ""))
             );
-            const title = createElement("h3", null, activity.title || "제목 없음");
-            body.append(kicker, title);
-            if (activity.details) body.append(createElement("p", null, activity.details));
-
-            const url = safeSourceUrl(activity.sourceUrl);
-            const link = createElement(url ? "a" : "span", "source-link", url ? "원본 근거 ↗" : "원본 링크 없음");
-            if (url) {
-                link.href = url;
-                link.target = "_blank";
-                link.rel = "noopener noreferrer";
-                link.setAttribute("aria-label", activity.title + " 원본 근거를 새 창에서 열기");
-            }
-            card.append(icon, body, link);
-            elements.activityList.append(card);
+            const assigneeCell = createElement("span", "table-cell col-assignee");
+            assigneeCell.append(assignee(activity.memberName));
+            const statusCell = createElement("span", "table-cell");
+            statusCell.append(statusLozenge(activity.status));
+            const linkCell = createElement("span", "table-cell col-link");
+            linkCell.append(sourceLink(activity, "원본 ↗"));
+            row.append(
+                typeIcon(activity.kind),
+                title,
+                assigneeCell,
+                statusCell,
+                createElement("span", "table-cell col-date", formatDate(activity.occurredAt, false)),
+                linkCell
+            );
+            rows.push(row);
         }
+        elements.activityList.replaceChildren(...rows);
+        elements.activityCount.textContent = state.activities.length + "개 활동 · 최신순";
     }
 
     function showSummaryState(name) {
@@ -205,50 +283,27 @@
         elements.summaryContent.hidden = name !== "content";
     }
 
-    function evidenceNode(evidenceId, lookup = state.activityById) {
-        const activity = lookup.get(evidenceId);
-        if (!activity) return createElement("span", "missing-evidence", "근거 " + evidenceId);
-        const url = safeSourceUrl(activity.sourceUrl);
-        if (!url) return createElement("span", "missing-evidence", activityKind(activity.kind).label + " · " + activity.id);
-        const link = createElement("a", "evidence-link", activityKind(activity.kind).label + " · " + activity.id + " ↗");
-        link.href = url;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.setAttribute("aria-label", activity.title + " 근거를 새 창에서 열기");
-        return link;
-    }
-
     function renderSummary(summary) {
         const modeLabels = { MEMBER: "팀원 요약", PROJECT: "프로젝트 요약", HANDOFF: "인수인계 요약" };
         elements.summaryMode.textContent = modeLabels[summary.mode] || summary.mode || "업무 요약";
         elements.summaryTitle.textContent = summary.title || "업무 요약";
-        elements.summaryGenerated.textContent = "생성: " + formatDate(summary.generatedAt, true) + " · " + (summary.generatedBy || "생성 방식 미확인");
-        elements.summarySections.replaceChildren();
+        elements.summaryGenerated.textContent = "생성 " + formatDate(summary.generatedAt, true) + " · " + (summary.generatedBy || "생성 방식 미확인");
 
-        for (const definition of sectionDefinitions) {
+        const columns = boardColumns.map((definition) => {
             const points = Array.isArray(summary[definition.key]) ? summary[definition.key] : [];
-            const section = createElement("section", "summary-section " + (definition.className || ""));
-            const heading = createElement("h3", null, definition.title);
-            heading.append(createElement("span", null, points.length + "개"));
-            section.append(heading);
-
-            if (!points.length) {
-                section.append(createElement("p", "no-points", definition.empty));
-            } else {
-                const list = createElement("ul");
-                for (const point of points) {
-                    const item = createElement("li");
-                    item.append(createElement("div", null, point.text || "내용 없음"));
-                    const links = createElement("div", "evidence-links");
-                    const ids = Array.isArray(point.evidenceIds) ? point.evidenceIds : [];
-                    for (const id of ids) links.append(evidenceNode(id));
-                    item.append(links);
-                    list.append(item);
-                }
-                section.append(list);
+            const column = createElement("section", "board-column");
+            const head = createElement("div", "board-column-head");
+            head.append(createElement("span", null, definition.title), createElement("span", "count", String(points.length)));
+            column.append(head);
+            if (!points.length) column.append(createElement("p", "board-empty", definition.empty));
+            for (const point of points) {
+                const card = createElement("div", "board-card" + (definition.blocker ? " is-blocker" : ""));
+                card.append(createElement("div", null, point.text || "내용 없음"), evidenceLinks(point.evidenceIds));
+                column.append(card);
             }
-            elements.summarySections.append(section);
-        }
+            return column;
+        });
+        elements.summarySections.replaceChildren(...columns);
         showSummaryState("content");
     }
 
@@ -284,7 +339,7 @@
         const sequence = ++state.requestSequence;
         showSummaryState("loading");
         setControlsDisabled(true);
-        elements.summaryRegion.scrollIntoView({ behavior: "smooth", block: "start" });
+        elements.summaryRegion.scrollIntoView({ behavior: "smooth", block: "nearest" });
         try {
             const summary = await requestJson(path, SUMMARY_TIMEOUT_MS);
             if (sequence !== state.requestSequence) return;
@@ -299,6 +354,8 @@
         }
     }
 
+    // ---------- 유사 업무 검색 ----------
+
     function showSimilarState(name) {
         elements.similarLoading.hidden = name !== "loading";
         elements.similarError.hidden = name !== "error";
@@ -310,49 +367,35 @@
     }
 
     function updateSimilarControls() {
-        const length = elements.similarQuery.value.length;
-        elements.similarCount.textContent = length + " / " + MAX_QUERY_LENGTH;
+        elements.similarCount.textContent = elements.similarQuery.value.length + " / " + MAX_QUERY_LENGTH;
         elements.similarSubmit.disabled = state.similarLoading || currentQuery().length < 2;
         elements.similarQuery.disabled = state.similarLoading;
         for (const chip of elements.similarChips) chip.disabled = state.similarLoading;
     }
 
     function renderPointList(list, countLabel, points, lookup, emptyText) {
-        list.replaceChildren();
-        countLabel.textContent = points.length + "개";
+        countLabel.textContent = String(points.length);
         if (!points.length) {
-            list.append(createElement("li", "no-points", emptyText));
+            list.replaceChildren(createElement("li", "no-points", emptyText));
             return;
         }
-        for (const point of points) {
+        list.replaceChildren(...points.map((point) => {
             const item = createElement("li");
-            item.append(createElement("div", null, point.text || "내용 없음"));
-            const links = createElement("div", "evidence-links");
-            const ids = Array.isArray(point.evidenceIds) ? point.evidenceIds : [];
-            for (const id of ids) links.append(evidenceNode(id, lookup));
-            item.append(links);
-            list.append(item);
-        }
+            item.append(createElement("div", null, point.text || "내용 없음"), evidenceLinks(point.evidenceIds, lookup));
+            return item;
+        }));
     }
 
-    function matchCard(match) {
+    function issueRow(match) {
         const activity = match.activity || {};
-        const kind = activityKind(activity.kind);
-        const card = createElement("article", "activity-card match-card");
+        const row = createElement("article", "issue-row");
 
-        const icon = createElement("span", "source-icon" + (kind.github ? " is-github" : ""), kind.short);
-        icon.setAttribute("aria-hidden", "true");
-
-        const body = createElement("div", "activity-body");
-        const kicker = createElement("div", "activity-kicker");
-        kicker.append(
-            createElement("span", null, kind.label + " · " + activity.id),
-            createElement("span", null, activity.memberName || "가명 팀원"),
-            createElement("span", null, activity.status || "상태 없음"),
-            createElement("time", null, formatDate(activity.occurredAt, false))
-        );
-        body.append(kicker, createElement("h3", null, activity.title || "제목 없음"));
-        if (activity.details) body.append(createElement("p", null, activity.details));
+        const main = createElement("div", "issue-main");
+        const top = createElement("div", "issue-top");
+        top.append(createElement("span", "issue-key", activity.id || ""), assignee(activity.memberName),
+            createElement("span", null, formatDate(activity.occurredAt, false)));
+        main.append(top, createElement("h4", "issue-title", activity.title || "제목 없음"));
+        if (activity.details) main.append(createElement("p", "issue-desc", activity.details));
 
         const score = Math.max(0, Math.min(1, Number(match.score) || 0));
         const meter = createElement("div", "score");
@@ -362,18 +405,12 @@
         bar.append(fill);
         bar.setAttribute("aria-hidden", "true");
         meter.append(bar, createElement("span", "score-label", "유사도 " + score.toFixed(2)));
-        body.append(meter);
+        main.append(meter);
 
-        const url = safeSourceUrl(activity.sourceUrl);
-        const link = createElement(url ? "a" : "span", "source-link", url ? "원본 ↗" : "원본 링크 없음");
-        if (url) {
-            link.href = url;
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-            link.setAttribute("aria-label", (activity.title || "과거 업무") + " 원본을 새 창에서 열기");
-        }
-        card.append(icon, body, link);
-        return card;
+        const side = createElement("div", "issue-side");
+        side.append(statusLozenge(activity.status), sourceLink(activity, "원본 ↗"));
+        row.append(typeIcon(activity.kind), main, side);
+        return row;
     }
 
     function renderSimilar(result) {
@@ -382,8 +419,8 @@
         const explanation = result.explanation || {};
 
         elements.similarOverview.textContent = explanation.overview || "설명을 만들지 못했습니다.";
-        elements.similarGenerated.textContent = "생성: " + formatDate(result.generatedAt, true)
-            + " · 설명 " + (explanation.generatedBy || "미확인") + " · 임베딩 " + (result.embeddingModel || "미확인");
+        elements.similarGenerated.textContent = formatDate(result.generatedAt, true)
+            + " · 답변 " + (explanation.generatedBy || "미확인") + " · 임베딩 " + (result.embeddingModel || "미확인");
 
         renderPointList(elements.similarPoints, elements.similarPointsCount,
             Array.isArray(explanation.similarWork) ? explanation.similarWork : [], lookup,
@@ -392,20 +429,19 @@
             Array.isArray(explanation.suggestedApproach) ? explanation.suggestedApproach : [], lookup,
             "과거 업무에서 확인되는 해결 방법이 없습니다.");
 
-        elements.similarMatches.replaceChildren(...matches.map(matchCard));
+        elements.similarMatches.replaceChildren(...matches.map(issueRow));
 
         const members = Array.isArray(result.experiencedMembers) ? result.experiencedMembers : [];
-        elements.similarMembers.replaceChildren();
         if (!members.length) {
-            elements.similarMembers.append(createElement("li", "no-points", "관련 경험을 확인할 팀원이 없습니다."));
-        }
-        for (const member of members) {
-            const item = createElement("li", "member-item");
-            item.append(createElement("strong", null, member.memberName || member.memberId));
-            const links = createElement("div", "evidence-links");
-            for (const id of Array.isArray(member.evidenceIds) ? member.evidenceIds : []) links.append(evidenceNode(id, lookup));
-            item.append(links);
-            elements.similarMembers.append(item);
+            elements.similarMembers.replaceChildren(createElement("li", "no-points", "관련 경험을 확인할 팀원이 없습니다."));
+        } else {
+            elements.similarMembers.replaceChildren(...members.map((member) => {
+                const item = createElement("li", "person");
+                const body = createElement("div");
+                body.append(createElement("strong", null, member.memberName || member.memberId), evidenceLinks(member.evidenceIds, lookup));
+                item.append(avatar(member.memberName || member.memberId), body);
+                return item;
+            }));
         }
         showSimilarState("content");
     }
@@ -417,6 +453,7 @@
         state.similarLoading = true;
         updateSimilarControls();
         showSimilarState("loading");
+        elements.similarRegion.scrollIntoView({ behavior: "smooth", block: "start" });
         try {
             const result = await requestJson(API_BASE + "/similar-work", SUMMARY_TIMEOUT_MS, { query });
             if (sequence !== state.similarSequence) return;
@@ -426,7 +463,7 @@
             if (sequence !== state.similarSequence) return;
             elements.similarErrorMessage.textContent = error.message;
             showSimilarState("error");
-            elements.similarError.focus();
+            elements.similarError.focus({ preventScroll: true });
         } finally {
             if (sequence === state.similarSequence) {
                 state.similarLoading = false;
@@ -435,9 +472,11 @@
         }
     }
 
+    // ---------- 이벤트 ----------
+
     elements.similarQuery.addEventListener("input", updateSimilarControls);
     elements.similarQuery.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
             event.preventDefault();
             searchSimilar();
         }
@@ -453,7 +492,6 @@
             searchSimilar();
         });
     }
-    updateSimilarControls();
 
     elements.memberSelect.addEventListener("change", () => setControlsDisabled(false));
     elements.projectSelect.addEventListener("change", () => setControlsDisabled(false));
@@ -471,5 +509,6 @@
         loadSummary(API_BASE + "/projects/" + encodeURIComponent(elements.projectSelect.value) + "/summary?mode=HANDOFF");
     });
 
+    updateSimilarControls();
     loadActivities(false);
 }());
