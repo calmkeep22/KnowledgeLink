@@ -28,7 +28,9 @@ class OpenAiActivitySummaryGeneratorTest {
                     "test-key-not-sent",
                     "test-model",
                     URI.create("https://example.invalid/v1/responses"),
-                    Duration.ofSeconds(1)));
+                    Duration.ofSeconds(1),
+                    "test-embedding-model",
+                    URI.create("https://example.invalid/v1/embeddings")));
 
     @Test
     void 공급자_요청은_지시와_마스킹된_자료를_분리하고_strict_schema를_사용한다() {

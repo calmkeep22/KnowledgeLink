@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="가명 Jira·GitHub 활동을 업무 맥락으로 정리하는 KnowledgeLink 해커톤 데모">
+    <meta name="description" content="새 업무와 비슷한 과거 Jira·GitHub 업무를 찾고 활동을 업무 맥락으로 정리하는 KnowledgeLink 해커톤 데모">
     <title>KnowledgeLink · 업무 맥락 데모</title>
     <link rel="stylesheet" href="./styles.css">
 </head>
@@ -20,14 +20,86 @@
 
 <main id="main-content" class="page-shell">
     <section class="hero" aria-labelledby="hero-title">
-        <p class="eyebrow">Jira + GitHub 활동 요약</p>
+        <p class="eyebrow">Jira + GitHub 업무 맥락</p>
         <h1 id="hero-title">흩어진 활동 기록을<br><span>하나의 업무 맥락으로.</span></h1>
-        <p class="hero-copy">팀원이 이번 주에 한 일, 진행 중인 일, 막힌 지점과 다음 행동을 원본 근거와 함께 확인합니다.</p>
+        <p class="hero-copy">새 업무와 비슷한 과거 이슈·PR을 찾아 누가 어떻게 풀었는지 보여 주고, 팀원이 한 일과 막힌 지점을 원본 근거와 함께 정리합니다.</p>
         <div class="principles" aria-label="데모 원칙">
+            <span>임베딩 유사도 검색</span>
             <span>AI 생성 표시</span>
             <span>문장별 원본 근거</span>
             <span>개인 순위 없음</span>
         </div>
+    </section>
+
+    <section id="similar-region" class="similar-section" aria-labelledby="similar-title">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Similar past work</p>
+                <h2 id="similar-title">이 문제, 누가 이미 풀었을까?</h2>
+            </div>
+            <p class="section-note">새 업무를 설명하면 해결된 과거 이슈·PR을 임베딩으로 찾고, AI가 찾은 자료만 근거로 참고할 점을 정리합니다.</p>
+        </div>
+
+        <form id="similar-form" class="similar-form" novalidate>
+            <label for="similar-query">새 업무 설명</label>
+            <textarea id="similar-query" rows="3" maxlength="500"
+                      placeholder="예: 결제 버튼을 두 번 누르면 주문이 두 번 생성돼요" aria-describedby="similar-count"></textarea>
+            <div class="similar-form-footer">
+                <div class="example-chips" role="group" aria-label="예시 질문">
+                    <button type="button" class="chip" data-example="결제 버튼을 두 번 누르면 주문이 두 번 생성돼요">결제 중복</button>
+                    <button type="button" class="chip" data-example="서버를 늘린 뒤 로그인이 자꾸 풀린다는 문의가 들어옴">로그인 풀림</button>
+                    <button type="button" class="chip" data-example="엑셀 다운로드가 너무 오래 걸리다가 타임아웃 남">대용량 다운로드</button>
+                    <button type="button" class="chip" data-example="로그에 개인정보가 그대로 찍히는 것 같아요">로그 개인정보</button>
+                </div>
+                <span id="similar-count" class="char-count">0 / 500</span>
+                <button id="similar-submit" class="button button-primary" type="submit" disabled>비슷한 업무 찾기</button>
+            </div>
+        </form>
+
+        <div id="similar-loading" class="loading-state" hidden role="status" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <div>
+                <strong>비슷한 과거 업무를 찾고 있습니다</strong>
+                <p>업무 설명을 임베딩해 해결된 이슈·PR과 비교하는 중입니다.</p>
+            </div>
+        </div>
+
+        <div id="similar-error" class="error-state" hidden role="alert" tabindex="-1">
+            <strong>검색하지 못했습니다</strong>
+            <p id="similar-error-message"></p>
+        </div>
+
+        <article id="similar-content" class="similar-result" hidden tabindex="-1" aria-labelledby="similar-overview">
+            <header class="similar-answer">
+                <div class="summary-meta">
+                    <span class="mode-badge">유사 업무</span>
+                    <span class="ai-badge">AI 생성</span>
+                </div>
+                <p id="similar-overview" class="similar-overview"></p>
+                <p id="similar-generated" class="similar-generated"></p>
+            </header>
+            <div class="summary-grid">
+                <section class="summary-section">
+                    <h3>비슷한 점 <span id="similar-points-count"></span></h3>
+                    <ul id="similar-points"></ul>
+                </section>
+                <section class="summary-section">
+                    <h3>참고할 해결 방법 <span id="similar-approach-count"></span></h3>
+                    <ul id="similar-approach"></ul>
+                </section>
+            </div>
+            <div class="similar-bottom">
+                <section aria-labelledby="similar-matches-title">
+                    <h3 id="similar-matches-title">검색된 과거 업무</h3>
+                    <div id="similar-matches" class="match-list"></div>
+                </section>
+                <section aria-labelledby="similar-members-title">
+                    <h3 id="similar-members-title">이 주제를 다뤄 본 팀원</h3>
+                    <p class="member-note">검색된 과거 업무의 담당자입니다. 평가나 순위가 아닙니다.</p>
+                    <ul id="similar-members" class="member-list"></ul>
+                </section>
+            </div>
+        </article>
     </section>
 
     <section class="workspace" aria-labelledby="workspace-title">
@@ -138,7 +210,7 @@
 
 <footer>
     <span>KnowledgeLink Hackathon MVP</span>
-    <span>Mock activity → AI context → Evidence</span>
+    <span>Mock activity → Embedding search → AI context → Evidence</span>
 </footer>
 
 <script src="./app.js" defer></script>

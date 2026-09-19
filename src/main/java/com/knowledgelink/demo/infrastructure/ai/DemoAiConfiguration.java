@@ -1,6 +1,9 @@
 package com.knowledgelink.demo.infrastructure.ai;
 
 import com.knowledgelink.demo.application.ActivitySummaryGenerator;
+import com.knowledgelink.demo.application.SimilarWorkExplainer;
+import com.knowledgelink.demo.application.SimilarWorkProperties;
+import com.knowledgelink.demo.application.TextEmbedder;
 import java.net.http.HttpClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -12,10 +15,10 @@ import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 
-/** application 출력 port에 데모용 AI adapter를 조립한다. */
+/** application 출력 port에 데모용 AI adapter를 조립한다. 요약·임베딩·설명은 같은 공급자 설정을 따른다. */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "kl.demo.enabled", havingValue = "true")
-@EnableConfigurationProperties(DemoAiProperties.class)
+@EnableConfigurationProperties({DemoAiProperties.class, SimilarWorkProperties.class})
 public class DemoAiConfiguration {
 
     @Bean
@@ -25,20 +28,53 @@ public class DemoAiConfiguration {
     }
 
     @Bean
+    @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "fake", matchIfMissing = true)
+    TextEmbedder fakeTextEmbedder() {
+        return new FakeTextEmbedder();
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "fake", matchIfMissing = true)
+    SimilarWorkExplainer fakeSimilarWorkExplainer() {
+        return new FakeSimilarWorkExplainer();
+    }
+
+    @Bean
     @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "openai")
-    ActivitySummaryGenerator openAiActivitySummaryGenerator(DemoAiProperties properties, ObjectMapper objectMapper) {
+    HttpClient openAiHttpClient(DemoAiProperties properties) {
         properties.openai().requireConfigured();
-        HttpClient client = HttpClient.newBuilder()
+        properties.openai().requireEmbeddingConfigured();
+        return HttpClient.newBuilder()
                 .connectTimeout(properties.openai().timeout())
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
-        return new OpenAiActivitySummaryGenerator(client, objectMapper, properties.openai());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "openai")
+    ActivitySummaryGenerator openAiActivitySummaryGenerator(
+            HttpClient openAiHttpClient, DemoAiProperties properties, ObjectMapper objectMapper) {
+        return new OpenAiActivitySummaryGenerator(openAiHttpClient, objectMapper, properties.openai());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "openai")
+    TextEmbedder openAiTextEmbedder(HttpClient openAiHttpClient, DemoAiProperties properties, ObjectMapper objectMapper) {
+        return new OpenAiTextEmbedder(openAiHttpClient, objectMapper, properties.openai());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "openai")
+    SimilarWorkExplainer openAiSimilarWorkExplainer(
+            HttpClient openAiHttpClient, DemoAiProperties properties, ObjectMapper objectMapper) {
+        return new OpenAiSimilarWorkExplainer(openAiHttpClient, objectMapper, properties.openai());
     }
 
     @Bean(destroyMethod = "close")
     @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "bedrock")
     BedrockRuntimeClient bedrockRuntimeClient(DemoAiProperties properties) {
         properties.bedrock().requireConfigured();
+        properties.bedrock().requireEmbeddingConfigured();
         return BedrockRuntimeClient.builder()
                 .region(Region.of(properties.bedrock().region()))
                 .credentialsProvider(DefaultCredentialsProvider.create())
@@ -51,10 +87,20 @@ public class DemoAiConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "bedrock")
     ActivitySummaryGenerator bedrockActivitySummaryGenerator(
-            BedrockRuntimeClient client,
-            DemoAiProperties properties,
-            ObjectMapper objectMapper
-    ) {
+            BedrockRuntimeClient client, DemoAiProperties properties, ObjectMapper objectMapper) {
         return new BedrockActivitySummaryGenerator(client::converse, objectMapper, properties.bedrock());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "bedrock")
+    TextEmbedder bedrockTextEmbedder(BedrockRuntimeClient client, DemoAiProperties properties, ObjectMapper objectMapper) {
+        return new BedrockTextEmbedder(client::invokeModel, objectMapper, properties.bedrock());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "bedrock")
+    SimilarWorkExplainer bedrockSimilarWorkExplainer(
+            BedrockRuntimeClient client, DemoAiProperties properties, ObjectMapper objectMapper) {
+        return new BedrockSimilarWorkExplainer(client::converse, objectMapper, properties.bedrock());
     }
 }
