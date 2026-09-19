@@ -1,0 +1,15 @@
+kl:
+  demo:
+    enabled: true
+    ai:
+      # 기본 데모는 네트워크·비용 없이 결정적으로 동작한다. 유료 공급자는 명시적으로만 활성화한다.
+      provider: ${KL_DEMO_AI_PROVIDER:fake}
+      openai:
+        api-key: ${OPENAI_API_KEY:}
+        model: ${OPENAI_MODEL:}
+        endpoint: ${OPENAI_RESPONSES_ENDPOINT:https://api.openai.com/v1/responses}
+        timeout: ${OPENAI_TIMEOUT:20s}
+      bedrock:
+        region: ${AWS_REGION:}
+        model: ${BEDROCK_MODEL_ID:}
+        timeout: ${BEDROCK_TIMEOUT:30s}

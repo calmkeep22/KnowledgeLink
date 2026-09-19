@@ -1,0 +1,110 @@
+[
+  {
+    "id": "act-1001",
+    "projectId": "project-atlas",
+    "memberId": "member-a",
+    "memberName": "김하늘",
+    "kind": "JIRA_ISSUE",
+    "title": "로그인 세션 만료 정책 정리",
+    "status": "DONE",
+    "occurredAt": "2026-09-15T01:20:00Z",
+    "sourceUrl": "https://example.invalid/jira/ATLAS-101",
+    "details": "세션 만료 조건과 재로그인 동작을 팀 합의안으로 정리했다."
+  },
+  {
+    "id": "act-1002",
+    "projectId": "project-atlas",
+    "memberId": "member-a",
+    "memberName": "김하늘",
+    "kind": "GITHUB_PULL_REQUEST",
+    "title": "세션 재검증 필터 추가",
+    "status": "MERGED",
+    "occurredAt": "2026-09-16T07:35:00Z",
+    "sourceUrl": "https://example.invalid/github/pull/42",
+    "details": "비밀번호 변경 후 기존 세션을 차단하는 검증 흐름을 구현했다."
+  },
+  {
+    "id": "act-1003",
+    "projectId": "project-atlas",
+    "memberId": "member-a",
+    "memberName": "김하늘",
+    "kind": "JIRA_ISSUE",
+    "title": "OAuth 공급자 검토",
+    "status": "BLOCKED",
+    "occurredAt": "2026-09-18T04:10:00Z",
+    "sourceUrl": "https://example.invalid/jira/ATLAS-112",
+    "details": "테스트 앱 승인 권한이 없어 관리자 확인을 기다리고 있다."
+  },
+  {
+    "id": "act-1004",
+    "projectId": "project-atlas",
+    "memberId": "member-b",
+    "memberName": "이로운",
+    "kind": "GITHUB_COMMIT",
+    "title": "활동 타임라인 정렬 안정화",
+    "status": "COMMITTED",
+    "occurredAt": "2026-09-16T09:00:00Z",
+    "sourceUrl": "https://example.invalid/github/commit/abc1004",
+    "details": "같은 시각의 활동을 식별자로 정렬해 응답 순서를 고정했다."
+  },
+  {
+    "id": "act-1005",
+    "projectId": "project-atlas",
+    "memberId": "member-b",
+    "memberName": "이로운",
+    "kind": "GITHUB_PULL_REQUEST",
+    "title": "프로젝트 요약 API 초안",
+    "status": "IN_REVIEW",
+    "occurredAt": "2026-09-18T02:30:00Z",
+    "sourceUrl": "https://example.invalid/github/pull/47",
+    "details": "팀원 활동을 묶어 프로젝트 현황으로 반환하는 API를 리뷰 중이다."
+  },
+  {
+    "id": "act-1006",
+    "projectId": "project-atlas",
+    "memberId": "member-c",
+    "memberName": "박새봄",
+    "kind": "JIRA_ISSUE",
+    "title": "데모 시나리오 작성",
+    "status": "IN_PROGRESS",
+    "occurredAt": "2026-09-17T06:45:00Z",
+    "sourceUrl": "https://example.invalid/jira/ATLAS-118",
+    "details": "관리자가 여러 도구를 오가는 문제를 보여 주는 발표 흐름을 작성 중이다."
+  },
+  {
+    "id": "act-1007",
+    "projectId": "project-atlas",
+    "memberId": "member-c",
+    "memberName": "박새봄",
+    "kind": "GITHUB_COMMIT",
+    "title": "데모 화면 결과 카드 추가",
+    "status": "COMMITTED",
+    "occurredAt": "2026-09-18T05:25:00Z",
+    "sourceUrl": "https://example.invalid/github/commit/abc1007",
+    "details": "완료, 진행, 블로커, 다음 행동을 한 화면에 배치했다."
+  },
+  {
+    "id": "act-2001",
+    "projectId": "project-orbit",
+    "memberId": "member-d",
+    "memberName": "최가온",
+    "kind": "JIRA_ISSUE",
+    "title": "검색 품질 기준 수립",
+    "status": "DONE",
+    "occurredAt": "2026-09-14T03:00:00Z",
+    "sourceUrl": "https://example.invalid/jira/ORBIT-21",
+    "details": "검색 결과 평가를 위한 대표 질문과 정답 근거를 정의했다."
+  },
+  {
+    "id": "act-2002",
+    "projectId": "project-orbit",
+    "memberId": "member-d",
+    "memberName": "최가온",
+    "kind": "GITHUB_PULL_REQUEST",
+    "title": "검색 응답 근거 표시",
+    "status": "IN_REVIEW",
+    "occurredAt": "2026-09-17T08:20:00Z",
+    "sourceUrl": "https://example.invalid/github/pull/15",
+    "details": "각 검색 문장에 원본 활동 링크를 표시하도록 변경했다."
+  }
+]

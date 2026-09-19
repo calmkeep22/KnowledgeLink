@@ -4,6 +4,7 @@ import com.knowledgelink.account.domain.AccountRepository;
 import com.knowledgelink.account.domain.AccountRole;
 import jakarta.servlet.DispatcherType;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -42,7 +43,8 @@ public class SecurityConfig {
                                                SecurityContextRepository securityContextRepository,
                                                CsrfTokenRepository csrfTokenRepository,
                                                AccountRepository accountRepository,
-                                               SecurityErrorHandler securityErrorHandler) throws Exception {
+                                               SecurityErrorHandler securityErrorHandler,
+                                               @Value("${kl.demo.enabled:false}") boolean demoEnabled) throws Exception {
         AuthorizationManager<RequestAuthorizationContext> readyAdmin = AuthorizationManagers.allOf(
                 AuthorityAuthorizationManager.<RequestAuthorizationContext>hasAuthority(
                         AccountAuthentications.CREDENTIALS_READY),
@@ -62,15 +64,19 @@ public class SecurityConfig {
                         .accessDeniedHandler(securityErrorHandler))
                 .addFilterAfter(new AccountRevalidationFilter(accountRepository, securityContextRepository),
                         SecurityContextHolderFilter.class)
-                .authorizeHttpRequests(auth -> auth
-                        .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
-                        .requestMatchers(HttpMethod.GET, API + "/auth/csrf").permitAll()
-                        .requestMatchers(HttpMethod.POST, API + "/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
-                        .requestMatchers(API + "/auth/**").authenticated()
-                        .requestMatchers(API + "/admin/**").access(readyAdmin)
-                        .requestMatchers(API + "/**").hasAuthority(AccountAuthentications.CREDENTIALS_READY)
-                        .anyRequest().denyAll());
+                .authorizeHttpRequests(auth -> {
+                    auth.dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
+                            .requestMatchers(HttpMethod.GET, API + "/auth/csrf").permitAll()
+                            .requestMatchers(HttpMethod.POST, API + "/auth/login").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll();
+                    if (demoEnabled) {
+                        auth.requestMatchers(HttpMethod.GET, API + "/demo/**", "/demo", "/demo/**").permitAll();
+                    }
+                    auth.requestMatchers(API + "/auth/**").authenticated()
+                            .requestMatchers(API + "/admin/**").access(readyAdmin)
+                            .requestMatchers(API + "/**").hasAuthority(AccountAuthentications.CREDENTIALS_READY)
+                            .anyRequest().denyAll();
+                });
         return http.build();
     }
 
