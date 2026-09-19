@@ -4,6 +4,7 @@ import com.knowledgelink.common.error.ApiException;
 import com.knowledgelink.common.error.ErrorCode;
 import com.knowledgelink.demo.domain.DemoActivity;
 import com.knowledgelink.demo.domain.ExperiencedMember;
+import com.knowledgelink.demo.domain.PastWorkSourceInfo;
 import com.knowledgelink.demo.domain.SimilarWorkExplanation;
 import com.knowledgelink.demo.domain.SimilarWorkMatch;
 import com.knowledgelink.demo.domain.SimilarWorkResult;
@@ -14,6 +15,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
@@ -37,6 +39,8 @@ public class SimilarWorkService {
     static final int MAX_QUERY_LENGTH = 500;
     private static final int MAX_EXPERIENCED_MEMBERS = 3;
     private static final double RELEVANT_SCORE_RATIO = 0.7;
+    /** 담당자가 없는 원본 이슈에 쓰는 memberId. 관련 팀원 집계에서 뺀다. */
+    public static final String UNASSIGNED_MEMBER_ID = "unassigned";
 
     private final PastWorkSource pastWorkSource;
     private final TextEmbedder embedder;
@@ -122,7 +126,33 @@ public class SimilarWorkService {
                 experiencedMembers(matches),
                 explanation,
                 embedder.modelId(),
-                Instant.now());
+                Instant.now(),
+                relatedWork(matches, indexed));
+    }
+
+    public PastWorkSourceInfo sourceInfo() {
+        return pastWorkSource.info();
+    }
+
+    /** 검색된 이슈를 고친 PR, 검색된 PR이 고친 이슈를 붙인다. 연결 상대가 검색 결과에 없어도 보여 준다. */
+    private Map<String, List<DemoActivity>> relatedWork(List<SimilarWorkMatch> matches, List<IndexedWork> indexed) {
+        Map<String, List<String>> links = pastWorkSource.links();
+        if (links.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, DemoActivity> byId = indexed.stream()
+                .collect(Collectors.toMap(work -> work.activity().id(), IndexedWork::activity, (first, second) -> first));
+        Map<String, List<DemoActivity>> related = new LinkedHashMap<>();
+        for (SimilarWorkMatch match : matches) {
+            List<DemoActivity> linked = links.getOrDefault(match.activity().id(), List.of()).stream()
+                    .map(byId::get)
+                    .filter(Objects::nonNull)
+                    .toList();
+            if (!linked.isEmpty()) {
+                related.put(match.activity().id(), linked);
+            }
+        }
+        return related;
     }
 
     private List<IndexedWork> ensureIndex() {
@@ -190,6 +220,7 @@ public class SimilarWorkService {
         double threshold = matches.getFirst().score() * RELEVANT_SCORE_RATIO;
         Map<String, List<SimilarWorkMatch>> byMember = matches.stream()
                 .filter(match -> match.score() > 0 && match.score() >= threshold)
+                .filter(match -> !UNASSIGNED_MEMBER_ID.equals(match.activity().memberId()))
                 .collect(Collectors.groupingBy(match -> match.activity().memberId(), LinkedHashMap::new, Collectors.toList()));
         return byMember.values().stream()
                 .map(memberMatches -> new ExperiencedMember(
