@@ -37,6 +37,21 @@ class FakeActivitySummaryGeneratorTest {
         assertTrue(first.nextActions().stream().allMatch(point -> !point.evidenceIds().isEmpty()));
     }
 
+    @Test
+    void 커밋은_완료한_일로_분류한다() {
+        SummaryGenerationRequest request = new SummaryGenerationRequest(
+                SummaryMode.MEMBER,
+                "member-1",
+                "개발자 A",
+                List.of(activity("GH-1", "결과 카드 추가", "COMMITTED", "2026-09-18T09:00:00Z")));
+
+        WorkSummary summary = generator.generate(request);
+
+        assertEquals(List.of("GH-1"), summary.completed().getFirst().evidenceIds());
+        assertTrue(summary.inProgress().isEmpty());
+        assertTrue(summary.nextActions().isEmpty());
+    }
+
     private static DemoActivity activity(String id, String title, String status, String occurredAt) {
         return new DemoActivity(
                 id,

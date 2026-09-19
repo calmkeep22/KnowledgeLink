@@ -61,6 +61,7 @@ public final class FakeActivitySummaryGenerator implements ActivitySummaryGenera
 
     private static boolean isCompleted(String status) {
         return status.contains("done") || status.contains("closed") || status.contains("merged")
+                || status.contains("committed")
                 || status.contains("resolved") || status.contains("완료") || status.contains("병합");
     }
 

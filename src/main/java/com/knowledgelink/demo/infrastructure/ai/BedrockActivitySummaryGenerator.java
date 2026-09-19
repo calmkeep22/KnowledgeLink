@@ -1,5 +1,6 @@
 package com.knowledgelink.demo.infrastructure.ai;
 
+import com.knowledgelink.demo.application.ActivitySummaryGenerationException;
 import com.knowledgelink.demo.application.ActivitySummaryGenerator;
 import com.knowledgelink.demo.application.SummaryGenerationRequest;
 import com.knowledgelink.demo.domain.DemoActivity;
@@ -135,7 +136,20 @@ public final class BedrockActivitySummaryGenerator implements ActivitySummaryGen
                 .filter(value -> value != null && !value.isBlank())
                 .findFirst()
                 .orElseThrow(() -> new ActivitySummaryGenerationException("Bedrock이 텍스트 결과를 반환하지 않았습니다."));
-        return text.strip();
+        return stripCodeFence(text.strip());
+    }
+
+    /** Converse는 출력 형식을 강제하지 않아, 지시를 어기고 ```json 펜스로 감싼 응답도 본문만 꺼낸다. */
+    static String stripCodeFence(String text) {
+        if (!text.startsWith("```")) {
+            return text;
+        }
+        int bodyStart = text.indexOf('\n');
+        int fenceEnd = text.lastIndexOf("```");
+        if (bodyStart < 0 || fenceEnd <= bodyStart) {
+            return text;
+        }
+        return text.substring(bodyStart + 1, fenceEnd).strip();
     }
 
     private static void validateEvidence(ProviderSummary summary, SummaryGenerationRequest request) {

@@ -1,6 +1,7 @@
 package com.knowledgelink.demo.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.knowledgelink.common.error.ApiException;
@@ -12,6 +13,7 @@ import com.knowledgelink.demo.domain.SummaryPoint;
 import com.knowledgelink.demo.domain.WorkSummary;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -75,7 +77,58 @@ class DemoSummaryServiceTest {
         DemoActivity selected = activity("act-1", "project-a", "member-a", "2026-09-18T00:00:00Z");
         DemoSummaryService service = service(List.of(selected), request -> summary(request, "act-from-other-scope"));
 
-        assertThrows(IllegalStateException.class, () -> service.summarizeMember("member-a"));
+        ApiException exception = assertThrows(ApiException.class, () -> service.summarizeMember("member-a"));
+
+        assertEquals(ErrorCode.TEMPORARY_UNAVAILABLE, exception.getErrorCode());
+    }
+
+    @Test
+    void providerFailureBecomesRetryableUnavailable() {
+        DemoSummaryService service = service(
+                List.of(activity("act-1", "project-a", "member-a", "2026-09-18T00:00:00Z")),
+                request -> { throw new ActivitySummaryGenerationException("공급자 실패"); });
+
+        ApiException exception = assertThrows(ApiException.class, () -> service.summarizeMember("member-a"));
+
+        assertEquals(ErrorCode.TEMPORARY_UNAVAILABLE, exception.getErrorCode());
+    }
+
+    @Test
+    void sameSummaryRequestCallsGeneratorOnce() {
+        AtomicInteger calls = new AtomicInteger();
+        DemoSummaryService service = service(
+                List.of(activity("act-1", "project-a", "member-a", "2026-09-18T00:00:00Z")),
+                request -> {
+                    calls.incrementAndGet();
+                    return summary(request, "act-1");
+                });
+
+        WorkSummary first = service.summarizeMember("member-a");
+        WorkSummary second = service.summarizeMember("member-a");
+        service.summarizeProject("project-a", SummaryMode.PROJECT);
+        service.summarizeProject("project-a", SummaryMode.HANDOFF);
+
+        assertSame(first, second);
+        assertEquals(3, calls.get());
+    }
+
+    @Test
+    void failedSummaryIsNotCached() {
+        AtomicInteger calls = new AtomicInteger();
+        DemoSummaryService service = service(
+                List.of(activity("act-1", "project-a", "member-a", "2026-09-18T00:00:00Z")),
+                request -> {
+                    if (calls.incrementAndGet() == 1) {
+                        throw new ActivitySummaryGenerationException("일시 실패");
+                    }
+                    return summary(request, "act-1");
+                });
+
+        assertThrows(ApiException.class, () -> service.summarizeMember("member-a"));
+        WorkSummary retried = service.summarizeMember("member-a");
+
+        assertEquals(SummaryMode.MEMBER, retried.mode());
+        assertEquals(2, calls.get());
     }
 
     private DemoSummaryService service(List<DemoActivity> activities, ActivitySummaryGenerator generator) {

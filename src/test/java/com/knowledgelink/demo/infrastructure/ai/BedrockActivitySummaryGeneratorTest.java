@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.knowledgelink.demo.application.ActivitySummaryGenerationException;
 import com.knowledgelink.demo.application.SummaryGenerationRequest;
 import com.knowledgelink.demo.domain.ActivityKind;
 import com.knowledgelink.demo.domain.DemoActivity;
@@ -63,6 +64,20 @@ class BedrockActivitySummaryGeneratorTest {
         assertEquals("이번 주 요약", summary.title());
         assertEquals(List.of("ACT-1"), summary.completed().getFirst().evidenceIds());
         assertEquals("bedrock:test-model", summary.generatedBy());
+    }
+
+    @Test
+    void 코드_펜스로_감싼_응답도_파싱한다() {
+        String output = """
+                ```json
+                {"title":"이번 주 요약","completed":[{"text":"PR을 병합했습니다.","evidenceIds":["ACT-1"]}],
+                "inProgress":[],"blockers":[],"nextActions":[]}
+                ```
+                """;
+
+        var summary = generator.parseProviderResponse(response(output), request());
+
+        assertEquals("이번 주 요약", summary.title());
     }
 
     private static ConverseResponse response(String text) {

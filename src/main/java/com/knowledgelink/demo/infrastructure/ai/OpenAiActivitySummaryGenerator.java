@@ -1,5 +1,6 @@
 package com.knowledgelink.demo.infrastructure.ai;
 
+import com.knowledgelink.demo.application.ActivitySummaryGenerationException;
 import com.knowledgelink.demo.application.ActivitySummaryGenerator;
 import com.knowledgelink.demo.application.SummaryGenerationRequest;
 import com.knowledgelink.demo.domain.DemoActivity;

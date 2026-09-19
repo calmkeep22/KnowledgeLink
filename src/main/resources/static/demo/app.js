@@ -2,6 +2,8 @@
     "use strict";
 
     const API_BASE = "/api/v1/demo";
+    // 외부 AI 호출은 서버 타임아웃(Bedrock 기본 30초)보다 화면이 먼저 포기하지 않도록 여유를 둔다.
+    const SUMMARY_TIMEOUT_MS = 45000;
     const state = { activities: [], activityById: new Map(), requestSequence: 0 };
 
     const elements = {
@@ -109,9 +111,9 @@
             .map((id) => ({ id, label: id }));
     }
 
-    async function requestJson(path) {
+    async function requestJson(path, timeoutMs = 15000) {
         const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), 15000);
+        const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
         try {
             const response = await fetch(path, {
                 method: "GET",
@@ -122,7 +124,9 @@
             if (!response.ok) {
                 const detail = response.status === 404
                     ? "선택한 데모 자료를 찾을 수 없습니다."
-                    : "요청이 실패했습니다 (HTTP " + response.status + ").";
+                    : response.status === 503
+                        ? "AI 요약을 만들지 못했습니다. 잠시 후 다시 시도해 주세요."
+                        : "요청이 실패했습니다 (HTTP " + response.status + ").";
                 throw new Error(detail);
             }
             return await response.json();
@@ -259,7 +263,7 @@
         setControlsDisabled(true);
         elements.summaryRegion.scrollIntoView({ behavior: "smooth", block: "start" });
         try {
-            const summary = await requestJson(path);
+            const summary = await requestJson(path, SUMMARY_TIMEOUT_MS);
             if (sequence !== state.requestSequence) return;
             renderSummary(summary);
         } catch (error) {

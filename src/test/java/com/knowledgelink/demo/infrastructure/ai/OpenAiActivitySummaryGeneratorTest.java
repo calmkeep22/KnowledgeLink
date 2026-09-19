@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.knowledgelink.demo.application.ActivitySummaryGenerationException;
 import com.knowledgelink.demo.application.SummaryGenerationRequest;
 import com.knowledgelink.demo.domain.ActivityKind;
 import com.knowledgelink.demo.domain.DemoActivity;
