@@ -3,6 +3,7 @@ package com.knowledgelink.demo.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.knowledgelink.common.error.ApiException;
 import com.knowledgelink.common.error.ErrorCode;
@@ -14,6 +15,7 @@ import com.knowledgelink.demo.domain.SimilarWorkResult;
 import com.knowledgelink.demo.domain.SummaryPoint;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -185,6 +187,59 @@ class SimilarWorkServiceTest {
         SimilarWorkResult result = service.search("결제가 두 번 됨");
 
         assertEquals(List.of("member-a"), result.experiencedMembers().stream().map(member -> member.memberId()).toList());
+    }
+
+    @Test
+    void 확장_검색어를_원문과_함께_임베딩하고_응답에_싣는다() {
+        List<String> embedded = new ArrayList<>();
+        TextEmbedder recording = new TextEmbedder() {
+            @Override
+            public float[] embed(String text) {
+                embedded.add(text);
+                return VECTORS.getOrDefault(text, new float[] {1, 0.05f, 0});
+            }
+
+            @Override
+            public String modelId() {
+                return "recording";
+            }
+        };
+        SimilarWorkService service = new SimilarWorkService(() -> pastWork, recording, explainer(evidenceOfTop()),
+                query -> "duplicate payment idempotency", new SimilarWorkProperties(2, 20, 10), () -> 0L);
+
+        SimilarWorkResult result = service.search("결제가 두 번 됨");
+
+        assertEquals("결제가 두 번 됨\nduplicate payment idempotency", embedded.getLast());
+        assertEquals("duplicate payment idempotency", result.expandedQuery());
+        assertEquals("결제가 두 번 됨", result.query());
+    }
+
+    @Test
+    void 검색어_확장이_실패해도_원문으로_검색한다() {
+        SimilarWorkService service = new SimilarWorkService(() -> pastWork, embedder(), explainer(evidenceOfTop()),
+                query -> { throw new ActivitySummaryGenerationException("확장 실패"); },
+                new SimilarWorkProperties(2, 20, 10), () -> 0L);
+
+        SimilarWorkResult result = service.search("결제가 두 번 됨");
+
+        assertEquals("p-1", result.matches().getFirst().activity().id());
+        assertEquals(null, result.expandedQuery());
+    }
+
+    @Test
+    void 일위_유사도가_기준보다_낮으면_설명_모델을_부르지_않고_안내한다() {
+        SimilarWorkService service = new SimilarWorkService(() -> pastWork, embedder(), explainer(evidenceOfTop()),
+                QueryRewriter.NONE, new SimilarWorkProperties(2, 20, 10, 0.9999), () -> 0L);
+
+        SimilarWorkResult result = service.search("결제가 두 번 됨");
+
+        assertTrue(result.lowRelevance());
+        assertEquals(0, explainCalls.get());
+        assertEquals("rule", result.explanation().generatedBy());
+        assertTrue(result.explanation().overview().startsWith("비슷한 과거 업무를 찾지 못했습니다."));
+        assertTrue(result.explanation().similarWork().isEmpty());
+        assertTrue(result.experiencedMembers().isEmpty());
+        assertEquals(2, result.matches().size());
     }
 
     private SimilarWorkService service(int topK, int perMinute, Function<SimilarWorkRequest, SimilarWorkExplanation> explain) {
