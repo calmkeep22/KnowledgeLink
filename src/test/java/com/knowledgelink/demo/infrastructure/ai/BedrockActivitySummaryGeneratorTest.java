@@ -24,7 +24,7 @@ class BedrockActivitySummaryGeneratorTest {
     private final BedrockActivitySummaryGenerator generator = new BedrockActivitySummaryGenerator(
             ignored -> response("{}"),
             new ObjectMapper(),
-            new DemoAiProperties.Bedrock("ap-northeast-2", "test-model", Duration.ofSeconds(1)));
+            new DemoAiProperties.Bedrock("ap-northeast-2", "test-model", Duration.ofSeconds(1), "test-embedding-model"));
 
     @Test
     void 요청은_시스템_지시와_마스킹된_자료를_분리한다() {
