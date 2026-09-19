@@ -1,6 +1,7 @@
 package com.knowledgelink.demo.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,6 +19,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -240,6 +246,79 @@ class SimilarWorkServiceTest {
         assertTrue(result.explanation().similarWork().isEmpty());
         assertTrue(result.experiencedMembers().isEmpty());
         assertEquals(2, result.matches().size());
+    }
+
+    @Test
+    void 일단계_검색은_설명을_기다리지_않고_이단계에서_만든_설명을_캐시에_합친다() {
+        SimilarWorkService service = service(2, 20, evidenceOfTop());
+
+        SimilarWorkResult retrieved = service.retrieve("결제가 두 번 됨");
+
+        assertTrue(retrieved.explanationPending());
+        assertEquals(null, retrieved.explanation());
+        assertEquals(0, explainCalls.get());
+        assertEquals(List.of("p-1", "p-2"), retrieved.matches().stream().map(match -> match.activity().id()).toList());
+
+        SimilarWorkExplanation explanation = service.explain("결제가 두 번 됨");
+        SimilarWorkExplanation again = service.explain("  결제가 두 번 됨 ");
+        SimilarWorkResult afterExplain = service.retrieve("결제가 두 번 됨");
+
+        assertSame(explanation, again);
+        assertEquals(1, explainCalls.get());
+        assertFalse(afterExplain.explanationPending());
+        assertSame(explanation, afterExplain.explanation());
+    }
+
+    @Test
+    void 같은_질의의_설명_요청이_동시에_와도_설명은_한_번만_만든다() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        SimilarWorkService service = service(2, 20, request -> {
+            started.countDown();
+            try {
+                release.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+            return explanation(request.matches().getFirst().activity().id());
+        });
+        service.retrieve("결제가 두 번 됨");
+        ExecutorService executor = Executors.newFixedThreadPool(3);
+        try {
+            List<Future<SimilarWorkExplanation>> futures = new ArrayList<>();
+            futures.add(executor.submit(() -> service.explain("결제가 두 번 됨")));
+            assertTrue(started.await(5, TimeUnit.SECONDS));
+            futures.add(executor.submit(() -> service.explain("결제가 두 번 됨")));
+            futures.add(executor.submit(() -> service.explain("결제가 두 번 됨")));
+            Thread.sleep(100);
+            release.countDown();
+
+            SimilarWorkExplanation first = futures.getFirst().get(5, TimeUnit.SECONDS);
+            for (Future<SimilarWorkExplanation> future : futures) {
+                assertSame(first, future.get(5, TimeUnit.SECONDS));
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+        assertEquals(1, explainCalls.get());
+    }
+
+    @Test
+    void 설명_생성이_실패하면_503이고_다시_요청하면_새로_만든다() {
+        AtomicInteger attempts = new AtomicInteger();
+        SimilarWorkService service = service(2, 20, request -> {
+            if (attempts.incrementAndGet() == 1) {
+                throw new ActivitySummaryGenerationException("일시 실패");
+            }
+            return explanation(request.matches().getFirst().activity().id());
+        });
+
+        ApiException failure = assertThrows(ApiException.class, () -> service.explain("결제가 두 번 됨"));
+        assertEquals(ErrorCode.TEMPORARY_UNAVAILABLE, failure.getErrorCode());
+        assertTrue(service.retrieve("결제가 두 번 됨").explanationPending());
+
+        assertEquals("비슷한 과거 업무가 있습니다.", service.explain("결제가 두 번 됨").overview());
+        assertEquals(2, attempts.get());
     }
 
     private SimilarWorkService service(int topK, int perMinute, Function<SimilarWorkRequest, SimilarWorkExplanation> explain) {

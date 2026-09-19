@@ -26,7 +26,11 @@ final class SimilarWorkPrompt {
             similarWork와 suggestedApproach의 각 항목에는 그 문장을 직접 뒷받침하는 evidenceIds를 하나 이상 넣는다.
             화면이 근거 링크를 따로 보여 주므로 overview와 text 문장 안에는 past-0101 같은 id를 쓰지 않는다.
             확인할 수 없는 사실은 만들지 않는다. 한국어로 답한다.
+            overview는 두 문장 이내로 쓴다. similarWork와 suggestedApproach는 각각 가장 중요한 것만 최대 3개,
+            각 text는 120자 이내로 쓴다. 짧을수록 좋다.
             """;
+    /** 위 분량 제한을 지키면 한국어 응답이 600토큰 안팎이다. 넘치면 잘리지 않도록 여유를 둔다. */
+    static final int MAX_OUTPUT_TOKENS = 900;
     static final String JSON_ONLY = """
             마크다운이나 코드 펜스를 사용하지 말고 다음 필드만 가진 JSON 객체를 반환한다:
             overview 문자열, similarWork 배열, suggestedApproach 배열.

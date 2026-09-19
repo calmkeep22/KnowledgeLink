@@ -18,6 +18,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,6 +51,7 @@ public class SimilarWorkService {
     private final SimilarWorkProperties properties;
     private final RequestBudget budget;
     private final Map<String, SimilarWorkResult> cache;
+    private final Map<String, CompletableFuture<SimilarWorkExplanation>> inFlight = new ConcurrentHashMap<>();
 
     private volatile List<IndexedWork> index;
 
@@ -100,7 +104,11 @@ public class SimilarWorkService {
         }
     }
 
-    public SimilarWorkResult search(String rawQuery) {
+    /**
+     * 1단계: 질의 확장·임베딩·순위 계산까지 하고 검색 결과를 돌려준다. 설명 생성(4~6초)을 기다리지 않아 1~2초 안에 응답한다.
+     * 설명이 이미 만들어졌거나 관련도가 낮아 규칙 안내로 끝난 경우에는 함께 담긴다. 새 질의는 분당 한도를 하나 쓴다.
+     */
+    public SimilarWorkResult retrieve(String rawQuery) {
         String query = normalize(rawQuery);
         SimilarWorkResult cached = cachedResult(query);
         if (cached != null) {
@@ -111,9 +119,13 @@ public class SimilarWorkService {
             throw new ApiException(ErrorCode.TEMPORARY_UNAVAILABLE);
         }
         try {
-            SimilarWorkResult result = searchUncached(query);
+            SimilarWorkResult result = retrieveUncached(query);
             synchronized (cache) {
-                cache.putIfAbsent(query, result);
+                SimilarWorkResult existing = cache.get(query);
+                if (existing != null) {
+                    return existing;
+                }
+                cache.put(query, result);
             }
             return result;
         } catch (ActivitySummaryGenerationException exception) {
@@ -122,7 +134,60 @@ public class SimilarWorkService {
         }
     }
 
-    private SimilarWorkResult searchUncached(String query) {
+    /**
+     * 2단계: 검색 결과만 근거로 설명을 만든다. 같은 질의의 설명은 한 번만 만들고, 동시에 온 요청은 진행 중인 생성을 기다린다.
+     * 설명은 검색 1회에 1회씩만 생기므로 분당 한도를 따로 쓰지 않는다.
+     */
+    public SimilarWorkExplanation explain(String rawQuery) {
+        SimilarWorkResult retrieved = retrieve(rawQuery);
+        if (retrieved.explanation() != null) {
+            return retrieved.explanation();
+        }
+        String query = retrieved.query();
+        CompletableFuture<SimilarWorkExplanation> mine = new CompletableFuture<>();
+        CompletableFuture<SimilarWorkExplanation> running = inFlight.putIfAbsent(query, mine);
+        if (running != null) {
+            return await(running);
+        }
+        try {
+            SimilarWorkExplanation explanation = explainer.explain(new SimilarWorkRequest(query, retrieved.matches()));
+            validateEvidence(explanation, retrieved.matches());
+            synchronized (cache) {
+                cache.put(query, retrieved.withExplanation(explanation));
+            }
+            mine.complete(explanation);
+            return explanation;
+        } catch (ActivitySummaryGenerationException exception) {
+            log.warn("Similar work explanation failed: queryLength={}", query.length(), exception);
+            ApiException failure = new ApiException(ErrorCode.TEMPORARY_UNAVAILABLE);
+            mine.completeExceptionally(failure);
+            throw failure;
+        } catch (RuntimeException exception) {
+            mine.completeExceptionally(exception);
+            throw exception;
+        } finally {
+            inFlight.remove(query, mine);
+        }
+    }
+
+    /** 두 단계를 이어서 부르고 설명까지 담긴 결과를 돌려준다. 캐시 예열과 테스트에서 쓴다. */
+    public SimilarWorkResult search(String rawQuery) {
+        explain(rawQuery);
+        return retrieve(rawQuery);
+    }
+
+    private static SimilarWorkExplanation await(CompletableFuture<SimilarWorkExplanation> running) {
+        try {
+            return running.join();
+        } catch (CompletionException exception) {
+            if (exception.getCause() instanceof RuntimeException cause) {
+                throw cause;
+            }
+            throw exception;
+        }
+    }
+
+    private SimilarWorkResult retrieveUncached(String query) {
         List<IndexedWork> indexed = ensureIndex();
         String expandedQuery = expand(query);
         // 확장 검색어만 쓰면 원문의 고유 명사나 코드가 빠질 수 있어 둘을 함께 임베딩한다.
@@ -136,14 +201,10 @@ public class SimilarWorkService {
                 .toList();
 
         boolean lowRelevance = matches.getFirst().score() < properties.minRelevantScore();
-        SimilarWorkExplanation explanation;
-        if (lowRelevance) {
-            // 관련 없는 질의에 설명 모델을 부르면 비용만 들고 억지 연결을 만들 수 있다.
-            explanation = new SimilarWorkExplanation(lowRelevanceOverview(matches.getFirst()), List.of(), List.of(), "rule");
-        } else {
-            explanation = explainer.explain(new SimilarWorkRequest(query, matches));
-            validateEvidence(explanation, matches);
-        }
+        // 관련 없는 질의에 설명 모델을 부르면 비용만 들고 억지 연결을 만들 수 있어 규칙 안내로 끝낸다.
+        SimilarWorkExplanation explanation = lowRelevance
+                ? new SimilarWorkExplanation(lowRelevanceOverview(matches.getFirst()), List.of(), List.of(), "rule")
+                : null;
 
         return new SimilarWorkResult(
                 "demo-similar-work-v1",
@@ -153,6 +214,7 @@ public class SimilarWorkService {
                 matches,
                 lowRelevance ? List.of() : experiencedMembers(matches),
                 explanation,
+                explanation == null,
                 embedder.modelId(),
                 Instant.now(),
                 relatedWork(matches, indexed));
@@ -211,9 +273,15 @@ public class SimilarWorkService {
                 if (pastWork.isEmpty()) {
                     throw new ActivitySummaryGenerationException("검색할 과거 업무가 없습니다.");
                 }
-                index = pastWork.stream()
-                        .map(activity -> new IndexedWork(activity, embedder.embed(embeddingText(activity))))
-                        .toList();
+                List<float[]> vectors = embedder.embedAll(pastWork.stream().map(SimilarWorkService::embeddingText).toList());
+                if (vectors.size() != pastWork.size()) {
+                    throw new ActivitySummaryGenerationException("색인 임베딩 수가 과거 업무 수와 다릅니다.");
+                }
+                List<IndexedWork> built = new java.util.ArrayList<>(pastWork.size());
+                for (int i = 0; i < pastWork.size(); i++) {
+                    built.add(new IndexedWork(pastWork.get(i), vectors.get(i)));
+                }
+                index = List.copyOf(built);
             }
             return index;
         }
