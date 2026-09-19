@@ -1,0 +1,8 @@
+{
+  "accountId": "svc-account-1",
+  "accountType": "atlassian",
+  "displayName": "KnowledgeLink Sync",
+  "active": true,
+  "timeZone": "Asia/Seoul",
+  "locale": "ko_KR"
+}

@@ -63,6 +63,12 @@ kl:
     max-attempts: 3
     retry-base: 30s
     retry-max: 300s
+  jira:
+    # 켜면 Jira Cloud를 실제로 호출한다. 인증 정보는 연결의 credential_ref가 가리키는
+    # 환경 변수에 "서비스계정이메일:API토큰" 형식으로 둔다.
+    enabled: false
+    timeout: 10s
+    page-size: 100
 
 logging:
   pattern:

@@ -48,7 +48,8 @@ docker compose --profile observability up -d
 | 1 | 프로젝트 기반, 인증(F01), 공통 오류, 계정 seed | 구현 완료. 2026-09-12 기준 단위 테스트 33건, 통합 테스트 19건(T01 포함) 통과 |
 | 2 | scope·grant 접근 모델, `GET /scopes` | 구현 완료. 2026-09-15 기준 단위 테스트 63건, 통합 테스트 35건 통과 |
 | 3 | 작업 엔진(job·실행 슬롯·lease), `GET /jobs/{jobId}`·재시도 | 구현 완료. 2026-09-16 기준 단위 테스트 80건, 통합 테스트 63건 통과(T24·T32 PASS, T25·T02 일부). 실제 작업 handler는 4단계에서 붙인다 |
-| 4~9 | 커넥터·색인·검색·AI·프론트엔드·배포 | 예정 |
+| 4 | Jira 이슈·댓글 증분 동기화, Jira Cloud adapter | 진행 중. 동기화 흐름은 fake adapter로, Jira Cloud adapter는 API 응답 형식의 fixture와 로컬 HTTP 서버로 검증. 실제 Jira Cloud 사이트 연동은 아직 확인하지 않았다 |
+| 5~9 | GitHub 커넥터·색인·검색·AI·프론트엔드·배포 | 예정 |
 
 - 명세의 API·AI 계약과 수용 테스트 중 위 표에 없는 항목은 아직 구현·실행되지 않았다.
 - 로그인 시도 제한은 아직 없다. 공개 배포 전에 추가한다.

@@ -1,0 +1,112 @@
+{
+  "issues": [
+    {
+      "id": "10001",
+      "key": "PAY-1",
+      "self": "https://example.atlassian.net/rest/api/3/issue/10001",
+      "fields": {
+        "summary": "결제 승인 요청 timeout",
+        "description": {
+          "type": "doc",
+          "version": 1,
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "결제 승인 요청이 " },
+                { "type": "text", "text": "timeout", "marks": [ { "type": "code" } ] },
+                { "type": "text", "text": " 난다. 로그: " },
+                {
+                  "type": "text",
+                  "text": "대시보드",
+                  "marks": [ { "type": "link", "attrs": { "href": "https://grafana.example.com/d/pay" } } ]
+                }
+              ]
+            },
+            {
+              "type": "codeBlock",
+              "attrs": { "language": "java" },
+              "content": [ { "type": "text", "text": "client.approve(order);" } ]
+            },
+            {
+              "type": "bulletList",
+              "content": [
+                {
+                  "type": "listItem",
+                  "content": [ { "type": "paragraph", "content": [ { "type": "text", "text": "재시도 추가" } ] } ]
+                }
+              ]
+            },
+            {
+              "type": "mediaSingle",
+              "content": [ { "type": "media", "attrs": { "id": "file-1", "type": "file", "collection": "" } } ]
+            }
+          ]
+        },
+        "issuetype": { "id": "10004", "name": "Bug" },
+        "status": { "id": "10002", "name": "Done" },
+        "resolution": { "id": "10000", "name": "Fixed" },
+        "labels": [ "payment", "backend", "payment" ],
+        "components": [ { "id": "10100", "name": "api" }, { "id": "10101", "name": "billing" } ],
+        "comment": {
+          "comments": [
+            {
+              "id": "20001",
+              "author": { "accountId": "account-a", "displayName": "개발자 A" },
+              "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [ { "type": "paragraph", "content": [ { "type": "text", "text": "재현했습니다." } ] } ]
+              },
+              "created": "2026-09-17T09:00:00.000+0900",
+              "updated": "2026-09-17T09:30:00.000+0900"
+            }
+          ],
+          "self": "https://example.atlassian.net/rest/api/3/issue/10001/comment",
+          "maxResults": 1,
+          "total": 1,
+          "startAt": 0
+        },
+        "resolutiondate": "2026-09-18T10:05:00.000+0900",
+        "updated": "2026-09-18T10:06:00.123+0900",
+        "project": { "id": "10000", "key": "PAY", "name": "결제" }
+      }
+    },
+    {
+      "id": "10002",
+      "key": "PAY-2",
+      "fields": {
+        "summary": "환불 배치 지연",
+        "description": null,
+        "issuetype": { "id": "10001", "name": "Task" },
+        "status": { "id": "3", "name": "In Progress" },
+        "resolution": null,
+        "labels": [],
+        "components": [],
+        "comment": {
+          "comments": [
+            {
+              "id": "30001",
+              "author": { "accountId": "account-b" },
+              "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [ { "type": "paragraph", "content": [ { "type": "text", "text": "가장 오래된 댓글" } ] } ]
+              },
+              "created": "2026-09-01T09:00:00.000+0900",
+              "updated": "2026-09-01T09:00:00.000+0900"
+            }
+          ],
+          "maxResults": 1,
+          "total": 25,
+          "startAt": 0
+        },
+        "resolutiondate": null,
+        "updated": "2026-09-18T10:07:00.000+0900",
+        "project": { "id": "10000", "key": "PAY", "name": "결제" }
+      }
+    }
+  ],
+  "nextPageToken": "page-token-2",
+  "isLast": false
+}

@@ -36,6 +36,14 @@
 - V6: `job.requested_by`. 같은 조직의 계정만 요청자가 될 수 있도록 `(requested_by, workspace_id)` 복합 FK를 걸었다.
 - 관측(ADR 0005): Micrometer 지표와 OpenTelemetry 트레이스를 OTLP로 내보낸다. 기본은 끄고 `otel` 프로필에서 켠다. 로컬은 compose `observability` 프로필의 `grafana/otel-lgtm`으로 본다.
   - 작업 엔진 지표 `kl.jobs.*`: 선점 수, 대기 시간, 종류·결과별 실행 시간, lease 만료 복구 수, 상태별 작업 수, 슬롯 사용 여부.
+- Jira 이슈·댓글 증분 동기화(F02, V7 `work_item`). SYNC handler가 페이지마다 이슈와 cursor를 한 transaction에 저장하고, 다음 실행은 cursor보다 10분 앞에서 다시 읽는다. 외부 호출 중에는 DB transaction을 잡지 않는다.
+  - 429·일시 오류는 같은 cursor에서 재개(RETRY_WAIT), 인증·설정 오류는 연결을 ERROR로 바꾸고 재시도하지 않는다.
+- Jira Cloud adapter: REST API v3 `GET /rest/api/3/search/jql`을 nextPageToken으로 넘긴다. `kl.jira.enabled=true`일 때만 adapter와 SYNC handler를 함께 등록한다(기본 꺼짐).
+  - 인증은 서비스 계정 이메일과 API 토큰의 Basic 인증이다. 연결의 `credential_ref`가 가리키는 환경 변수에 `이메일:API토큰`으로 둔다.
+  - JQL 날짜는 분 단위이고 서비스 계정 시간대로 해석되므로, 계정 시간대(`/rest/api/3/myself`)를 읽어 cursor 시각을 그 시간대의 분으로 내린다. 시간대를 모르면 추측하지 않고 설정 오류로 멈춘다.
+  - 설명·댓글의 ADF를 평문으로 바꾼다. 코드 블록과 링크 주소는 남기고 첨부는 뺀다.
+  - 검색 결과에 댓글이 다 오지 않은 이슈만 댓글 API로 최근 20개를 다시 읽는다.
+  - 429는 `Retry-After`(초), 없으면 `X-RateLimit-Reset` 시각까지 기다린다. 401·403은 인증 오류, 400·404 등은 설정 오류, 408·5xx·연결 실패는 일시 오류다.
 
 ### Changed
 - `UuidV7`이 한 JVM 안에서 단조 증가한다(RFC 9562 6.2 Method 2). 같은 밀리초 안에서는 무작위 양수를 더한다.
@@ -50,6 +58,7 @@
 - 없는 계정·틀린 비밀번호·비활성 계정을 같은 응답으로 처리하고, 없는 계정도 해시 비교를 수행해 응답 시간 차이를 줄였다.
 - BCrypt 72바이트 한도를 넘는 비밀번호는 설정 단계에서 거절하고 로그인에서도 예외 없이 실패 처리한다.
 - 연결의 `credential_ref`는 환경 변수 이름 형식만 받는다(애플리케이션 검증과 DB CHECK 둘 다). 토큰 값을 잘못 넣으면 거절하고, 오류 메시지에 그 값을 싣지 않는다.
+- Jira adapter는 인증 헤더를 https(로컬 테스트 서버만 http)로만 보내고 redirect를 따라가지 않는다. JQL에는 숫자 project ID만 넣는다.
 
 ### Notes
 - 명세 대비 차이: `login_id`는 조직 내 unique보다 강한 전역 unique로 두었다(단일 조직 MVP).
