@@ -14,6 +14,7 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 
 /** application 출력 port에 데모용 AI adapter를 조립한다. */
 @Configuration(proxyBeanMethods = false)
+@ConditionalOnProperty(name = "kl.demo.enabled", havingValue = "true")
 @EnableConfigurationProperties(DemoAiProperties.class)
 public class DemoAiConfiguration {
 
