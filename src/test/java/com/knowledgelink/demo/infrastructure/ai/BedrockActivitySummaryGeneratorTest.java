@@ -61,7 +61,7 @@ class BedrockActivitySummaryGeneratorTest {
 
         var summary = generator.parseProviderResponse(response(output), request());
 
-        assertEquals("이번 주 요약", summary.title());
+        assertEquals("개발자 A의 이번 주 업무 요약", summary.title());
         assertEquals(List.of("ACT-1"), summary.completed().getFirst().evidenceIds());
         assertEquals("bedrock:test-model", summary.generatedBy());
     }
@@ -77,7 +77,7 @@ class BedrockActivitySummaryGeneratorTest {
 
         var summary = generator.parseProviderResponse(response(output), request());
 
-        assertEquals("이번 주 요약", summary.title());
+        assertEquals("개발자 A의 이번 주 업무 요약", summary.title());
     }
 
     private static ConverseResponse response(String text) {

@@ -157,7 +157,7 @@ public final class OpenAiActivitySummaryGenerator implements ActivitySummaryGene
                     "demo-summary-v1",
                     request.mode(),
                     request.subjectId(),
-                    providerSummary.title(),
+                    request.mode().titleFor(request.subjectName()),
                     providerSummary.completed(),
                     providerSummary.inProgress(),
                     providerSummary.blockers(),

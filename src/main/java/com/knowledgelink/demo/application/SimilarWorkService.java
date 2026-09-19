@@ -36,7 +36,7 @@ public class SimilarWorkService {
 
     static final int MAX_QUERY_LENGTH = 500;
     private static final int MAX_EXPERIENCED_MEMBERS = 3;
-    private static final double RELEVANT_SCORE_RATIO = 0.5;
+    private static final double RELEVANT_SCORE_RATIO = 0.7;
 
     private final PastWorkSource pastWorkSource;
     private final TextEmbedder embedder;
@@ -183,7 +183,8 @@ public class SimilarWorkService {
 
     /**
      * 담당자별로 검색 결과 유사도를 더한다. 이번 질의에 대한 관련 경험의 근거일 뿐 사람의 성과 지표가 아니다.
-     * 1위의 절반에 못 미치는 결과는 우연히 걸린 자료일 가능성이 커서 담당자 집계에서 뺀다.
+     * 1위의 70%에 못 미치는 결과는 주제가 다른 자료일 가능성이 커서 담당자 집계에서 뺀다.
+     * Titan 기준으로 같은 주제는 0.5~0.65, 다른 주제도 0.3 안팎이 나와 절반 기준으로는 걸러지지 않았다.
      */
     private static List<ExperiencedMember> experiencedMembers(List<SimilarWorkMatch> matches) {
         double threshold = matches.getFirst().score() * RELEVANT_SCORE_RATIO;

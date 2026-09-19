@@ -24,6 +24,7 @@ final class SimilarWorkPrompt {
             similarWork의 각 항목은 과거 업무가 새 업무와 어떤 점에서 비슷한지 설명한다. 관련 없는 과거 업무는 넣지 않는다.
             suggestedApproach의 각 항목은 과거 업무에서 확인되는 원인이나 해결 방법 중 새 업무에 참고할 점을 제안한다.
             similarWork와 suggestedApproach의 각 항목에는 그 문장을 직접 뒷받침하는 evidenceIds를 하나 이상 넣는다.
+            화면이 근거 링크를 따로 보여 주므로 overview와 text 문장 안에는 past-0101 같은 id를 쓰지 않는다.
             확인할 수 없는 사실은 만들지 않는다. 한국어로 답한다.
             """;
     static final String JSON_ONLY = """

@@ -57,7 +57,7 @@ class SimilarWorkServiceTest {
 
         SimilarWorkResult result = service.search("결제가 두 번 됨");
 
-        // 세 번째 결과(세션 만료, 유사도 약 0.05)는 1위의 절반에 못 미쳐 담당자 집계에서 빠진다.
+        // 세 번째 결과(세션 만료, 유사도 약 0.05)는 1위의 70%에 못 미쳐 담당자 집계에서 빠진다.
         assertEquals("p-3", result.matches().get(2).activity().id());
         assertEquals(1, result.experiencedMembers().size());
         assertEquals("member-a", result.experiencedMembers().getFirst().memberId());
