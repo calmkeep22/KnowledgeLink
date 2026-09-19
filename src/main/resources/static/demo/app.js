@@ -44,6 +44,9 @@
         similarErrorMessage: $("#similar-error-message"),
         similarContent: $("#similar-content"),
         similarOverview: $("#similar-overview"),
+        similarExpanded: $("#similar-expanded"),
+        similarAnswerGrid: $("#similar-answer-grid"),
+        similarPeople: $("#similar-people"),
         similarGenerated: $("#similar-generated"),
         similarPoints: $("#similar-points"),
         similarPointsCount: $("#similar-points-count"),
@@ -447,7 +450,18 @@
         }
         const explanation = result.explanation || {};
 
+        const lowRelevance = result.lowRelevance === true;
+        elements.similarContent.classList.toggle("is-low", lowRelevance);
+        elements.similarAnswerGrid.hidden = lowRelevance;
+        elements.similarPeople.hidden = lowRelevance;
         elements.similarOverview.textContent = explanation.overview || "설명을 만들지 못했습니다.";
+        elements.similarExpanded.hidden = !result.expandedQuery;
+        elements.similarExpanded.replaceChildren();
+        if (result.expandedQuery) {
+            elements.similarExpanded.append(
+                createElement("span", "expanded-label", "AI가 넓힌 검색어"),
+                createElement("span", "expanded-text", result.expandedQuery));
+        }
         elements.similarGenerated.textContent = formatDate(result.generatedAt, true)
             + " · 답변 " + (explanation.generatedBy || "미확인") + " · 임베딩 " + (result.embeddingModel || "미확인");
 

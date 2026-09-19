@@ -1,6 +1,7 @@
 package com.knowledgelink.demo.infrastructure.ai;
 
 import com.knowledgelink.demo.application.ActivitySummaryGenerator;
+import com.knowledgelink.demo.application.QueryRewriter;
 import com.knowledgelink.demo.application.SimilarWorkExplainer;
 import com.knowledgelink.demo.application.SimilarWorkProperties;
 import com.knowledgelink.demo.application.TextEmbedder;
@@ -37,6 +38,24 @@ public class DemoAiConfiguration {
     @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "fake", matchIfMissing = true)
     SimilarWorkExplainer fakeSimilarWorkExplainer() {
         return new FakeSimilarWorkExplainer();
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "fake", matchIfMissing = true)
+    QueryRewriter fakeQueryRewriter() {
+        return QueryRewriter.NONE;
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "openai")
+    QueryRewriter openAiQueryRewriter(HttpClient openAiHttpClient, DemoAiProperties properties, ObjectMapper objectMapper) {
+        return new OpenAiQueryRewriter(openAiHttpClient, objectMapper, properties.openai());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "bedrock")
+    QueryRewriter bedrockQueryRewriter(BedrockRuntimeClient client, DemoAiProperties properties) {
+        return new BedrockQueryRewriter(client::converse, properties.bedrock());
     }
 
     @Bean

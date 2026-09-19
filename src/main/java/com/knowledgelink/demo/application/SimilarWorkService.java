@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -23,8 +24,6 @@ import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 /**
@@ -45,6 +44,7 @@ public class SimilarWorkService {
     private final PastWorkSource pastWorkSource;
     private final TextEmbedder embedder;
     private final SimilarWorkExplainer explainer;
+    private final QueryRewriter rewriter;
     private final SimilarWorkProperties properties;
     private final RequestBudget budget;
     private final Map<String, SimilarWorkResult> cache;
@@ -55,8 +55,16 @@ public class SimilarWorkService {
     public SimilarWorkService(PastWorkSource pastWorkSource,
                               TextEmbedder embedder,
                               SimilarWorkExplainer explainer,
+                              QueryRewriter rewriter,
                               SimilarWorkProperties properties) {
-        this(pastWorkSource, embedder, explainer, properties, System::nanoTime);
+        this(pastWorkSource, embedder, explainer, rewriter, properties, System::nanoTime);
+    }
+
+    public SimilarWorkService(PastWorkSource pastWorkSource,
+                              TextEmbedder embedder,
+                              SimilarWorkExplainer explainer,
+                              SimilarWorkProperties properties) {
+        this(pastWorkSource, embedder, explainer, QueryRewriter.NONE, properties, System::nanoTime);
     }
 
     SimilarWorkService(PastWorkSource pastWorkSource,
@@ -64,16 +72,25 @@ public class SimilarWorkService {
                        SimilarWorkExplainer explainer,
                        SimilarWorkProperties properties,
                        LongSupplier nanoClock) {
+        this(pastWorkSource, embedder, explainer, QueryRewriter.NONE, properties, nanoClock);
+    }
+
+    SimilarWorkService(PastWorkSource pastWorkSource,
+                       TextEmbedder embedder,
+                       SimilarWorkExplainer explainer,
+                       QueryRewriter rewriter,
+                       SimilarWorkProperties properties,
+                       LongSupplier nanoClock) {
         this.pastWorkSource = pastWorkSource;
         this.embedder = embedder;
         this.explainer = explainer;
+        this.rewriter = rewriter;
         this.properties = properties;
         this.budget = new RequestBudget(properties.maxAiRequestsPerMinute(), nanoClock);
         this.cache = boundedCache(properties.cacheSize());
     }
 
-    /** 첫 검색이 색인 시간까지 기다리지 않도록 기동 직후 미리 만든다. 실패해도 첫 검색에서 다시 시도한다. */
-    @EventListener(ApplicationReadyEvent.class)
+    /** 첫 검색이 색인 시간까지 기다리지 않도록 미리 만든다. 실패해도 첫 검색에서 다시 시도한다. */
     public void warmUp() {
         try {
             ensureIndex();
@@ -107,7 +124,9 @@ public class SimilarWorkService {
 
     private SimilarWorkResult searchUncached(String query) {
         List<IndexedWork> indexed = ensureIndex();
-        float[] queryVector = embedder.embed(query);
+        String expandedQuery = expand(query);
+        // 확장 검색어만 쓰면 원문의 고유 명사나 코드가 빠질 수 있어 둘을 함께 임베딩한다.
+        float[] queryVector = embedder.embed(expandedQuery == null ? query : query + "\n" + expandedQuery);
 
         List<SimilarWorkMatch> matches = indexed.stream()
                 .map(work -> new SimilarWorkMatch(work.activity(), round(cosine(queryVector, work.vector()))))
@@ -116,18 +135,44 @@ public class SimilarWorkService {
                 .limit(properties.topK())
                 .toList();
 
-        SimilarWorkExplanation explanation = explainer.explain(new SimilarWorkRequest(query, matches));
-        validateEvidence(explanation, matches);
+        boolean lowRelevance = matches.getFirst().score() < properties.minRelevantScore();
+        SimilarWorkExplanation explanation;
+        if (lowRelevance) {
+            // 관련 없는 질의에 설명 모델을 부르면 비용만 들고 억지 연결을 만들 수 있다.
+            explanation = new SimilarWorkExplanation(lowRelevanceOverview(matches.getFirst()), List.of(), List.of(), "rule");
+        } else {
+            explanation = explainer.explain(new SimilarWorkRequest(query, matches));
+            validateEvidence(explanation, matches);
+        }
 
         return new SimilarWorkResult(
                 "demo-similar-work-v1",
                 query,
+                expandedQuery,
+                lowRelevance,
                 matches,
-                experiencedMembers(matches),
+                lowRelevance ? List.of() : experiencedMembers(matches),
                 explanation,
                 embedder.modelId(),
                 Instant.now(),
                 relatedWork(matches, indexed));
+    }
+
+    /** 확장 검색어. 원문과 같거나 확장에 실패하면 null이고, 실패해도 원문으로 검색을 이어 간다. */
+    private String expand(String query) {
+        try {
+            String expanded = rewriter.rewrite(query);
+            return expanded == null || expanded.isBlank() || expanded.strip().equals(query) ? null : expanded.strip();
+        } catch (RuntimeException exception) {
+            log.warn("Query expansion failed; searching with the original query", exception);
+            return null;
+        }
+    }
+
+    private static String lowRelevanceOverview(SimilarWorkMatch best) {
+        return String.format(Locale.ROOT,
+                "비슷한 과거 업무를 찾지 못했습니다. 가장 가까운 '%s'도 유사도가 %.2f로 낮아 참고로만 보여 드립니다.",
+                best.activity().title(), best.score());
     }
 
     public PastWorkSourceInfo sourceInfo() {
