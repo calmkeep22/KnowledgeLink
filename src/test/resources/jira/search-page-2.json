@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "id": "10003",
+      "key": "PAY-3",
+      "fields": {
+        "summary": "카드사 응답 코드 매핑",
+        "description": {
+          "type": "doc",
+          "version": 1,
+          "content": [ { "type": "paragraph", "content": [ { "type": "text", "text": "매핑 표를 갱신한다." } ] } ]
+        },
+        "issuetype": { "id": "10001", "name": "Task" },
+        "status": { "id": "1", "name": "To Do" },
+        "resolution": null,
+        "labels": [ "card" ],
+        "components": [],
+        "comment": { "comments": [], "maxResults": 0, "total": 0, "startAt": 0 },
+        "resolutiondate": null,
+        "updated": "2026-09-18T10:08:00.000+0900",
+        "project": { "id": "10000", "key": "PAY", "name": "결제" }
+      }
+    }
+  ],
+  "isLast": true
+}

@@ -18,6 +18,7 @@ kl:
         # Jira Cloud 사이트 ID(cloudId). https://<사이트>.atlassian.net/_edge/tenant_info 에서 확인한다.
         site-id: 00000000-0000-0000-0000-000000000000
         base-url: https://your-site.atlassian.net
+        # 이 이름의 환경 변수에 "서비스계정이메일:API토큰"을 넣는다. 동기화는 kl.jira.enabled=true일 때만 돈다.
         credential-ref: KL_JIRA_TOKEN
         scopes:
           - external-id: "10000"      # Jira 프로젝트 ID
