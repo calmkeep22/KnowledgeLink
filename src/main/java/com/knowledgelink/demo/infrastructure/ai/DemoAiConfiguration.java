@@ -79,7 +79,7 @@ public class DemoAiConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "openai")
     TextEmbedder openAiTextEmbedder(HttpClient openAiHttpClient, DemoAiProperties properties, ObjectMapper objectMapper) {
-        return new OpenAiTextEmbedder(openAiHttpClient, objectMapper, properties.openai());
+        return caching(new OpenAiTextEmbedder(openAiHttpClient, objectMapper, properties.openai()), properties, objectMapper);
     }
 
     @Bean
@@ -113,7 +113,13 @@ public class DemoAiConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "kl.demo.ai", name = "provider", havingValue = "bedrock")
     TextEmbedder bedrockTextEmbedder(BedrockRuntimeClient client, DemoAiProperties properties, ObjectMapper objectMapper) {
-        return new BedrockTextEmbedder(client::invokeModel, objectMapper, properties.bedrock());
+        return caching(new BedrockTextEmbedder(client::invokeModel, objectMapper, properties.bedrock()), properties, objectMapper);
+    }
+
+    /** 유료 임베딩은 색인 결과를 저장해 재시작 때 다시 부르지 않고, 없는 항목은 병렬로 채운다. */
+    private static TextEmbedder caching(TextEmbedder embedder, DemoAiProperties properties, ObjectMapper objectMapper) {
+        return new CachingTextEmbedder(embedder, objectMapper,
+                properties.embeddingCache().path(), properties.embeddingCache().parallelism());
     }
 
     @Bean

@@ -16,6 +16,10 @@ kl:
         model: ${BEDROCK_MODEL_ID:}
         timeout: ${BEDROCK_TIMEOUT:30s}
         embedding-model: ${BEDROCK_EMBEDDING_MODEL_ID:}
+      # 과거 업무 색인 임베딩 저장본. 재시작 때 바뀐 항목만 공급자를 호출한다. 비우면 매번 임베딩한다.
+      embedding-cache:
+        path: ${KL_DEMO_EMBEDDING_CACHE:}
+        parallelism: ${KL_DEMO_EMBEDDING_PARALLELISM:4}
     similar-work:
       top-k: ${KL_DEMO_SIMILAR_TOP_K:5}
       # 캐시되지 않은 새 질의만 센다. 공개 링크에서 유료 호출이 몰리는 것을 막는 상한이다.
@@ -50,6 +54,8 @@ kl:
         issue-types: ${KL_DEMO_ISSUE_TYPES:Bug}
         # 수집에 성공하면 저장하고, 다음 기동에서 수집이 실패하면 이 저장본을 쓴다.
         snapshot-path: ${KL_DEMO_PAST_WORK_SNAPSHOT:}
+        # 저장본이 이보다 새로우면 재시작 때 수집하지 않고 저장본으로 바로 시작한다. 0이면 매번 수집한다.
+        snapshot-max-age: ${KL_DEMO_PAST_WORK_SNAPSHOT_MAX_AGE:12h}
         examples:
           - label: 스토어 메모리 누수
             query: RocksDB 스토어를 닫은 뒤에도 네이티브 메모리가 계속 늘다가 결국 OOM으로 죽어요

@@ -55,7 +55,7 @@ public final class OpenAiSimilarWorkExplainer implements SimilarWorkExplainer {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", properties.model());
         root.put("store", false);
-        root.put("max_output_tokens", 2000);
+        root.put("max_output_tokens", SimilarWorkPrompt.MAX_OUTPUT_TOKENS);
         ArrayNode input = root.putArray("input");
         input.add(message("developer", SimilarWorkPrompt.INSTRUCTIONS));
         input.add(message("user", objectMapper.writeValueAsString(

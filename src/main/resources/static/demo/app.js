@@ -6,7 +6,10 @@
     const SUMMARY_TIMEOUT_MS = 45000;
     const MAX_QUERY_LENGTH = 500;
     const AVATAR_COLORS = ["#1868db", "#803fa5", "#4c6b1f", "#c75300", "#ae2e24", "#206a83", "#5e4db2"];
-    const state = { activities: [], activityById: new Map(), requestSequence: 0, similarSequence: 0, similarLoading: false };
+    const state = {
+        activities: [], activityById: new Map(), requestSequence: 0,
+        similarSequence: 0, similarLoading: false, similarLookup: new Map(), similarMeta: "", similarLowRelevance: false
+    };
 
     const $ = (selector) => document.querySelector(selector);
     const elements = {
@@ -45,6 +48,7 @@
         similarContent: $("#similar-content"),
         similarOverview: $("#similar-overview"),
         similarExpanded: $("#similar-expanded"),
+        similarAnswerLoading: $("#similar-answer-loading"),
         similarAnswerGrid: $("#similar-answer-grid"),
         similarPeople: $("#similar-people"),
         similarGenerated: $("#similar-generated"),
@@ -441,6 +445,46 @@
         return row;
     }
 
+    function renderExplanation(explanation, lookup, meta) {
+        elements.similarAnswerLoading.hidden = true;
+        elements.similarOverview.hidden = false;
+        elements.similarOverview.textContent = explanation.overview || "설명을 만들지 못했습니다.";
+        elements.similarGenerated.textContent = meta + " · 답변 " + (explanation.generatedBy || "미확인");
+        renderPointList(elements.similarPoints, elements.similarPointsCount,
+            Array.isArray(explanation.similarWork) ? explanation.similarWork : [], lookup,
+            "관련성이 뚜렷한 과거 업무를 찾지 못했습니다.");
+        renderPointList(elements.similarApproach, elements.similarApproachCount,
+            Array.isArray(explanation.suggestedApproach) ? explanation.suggestedApproach : [], lookup,
+            "과거 업무에서 확인되는 해결 방법이 없습니다.");
+        elements.similarAnswerGrid.hidden = state.similarLowRelevance;
+    }
+
+    function renderExplanationPending(meta) {
+        elements.similarAnswerLoading.hidden = false;
+        elements.similarOverview.hidden = true;
+        elements.similarAnswerGrid.hidden = true;
+        elements.similarGenerated.textContent = meta + " · 답변 생성 중";
+    }
+
+    function renderExplanationError(message, meta) {
+        elements.similarAnswerLoading.hidden = true;
+        elements.similarOverview.hidden = false;
+        elements.similarOverview.textContent = message + " 검색된 과거 업무는 아래에서 확인할 수 있습니다.";
+        elements.similarAnswerGrid.hidden = true;
+        elements.similarGenerated.textContent = meta;
+    }
+
+    async function loadExplanation(query, sequence) {
+        try {
+            const explanation = await requestJson(API_BASE + "/similar-work/explanation", SUMMARY_TIMEOUT_MS, { query });
+            if (sequence !== state.similarSequence) return;
+            renderExplanation(explanation, state.similarLookup, state.similarMeta);
+        } catch (error) {
+            if (sequence !== state.similarSequence) return;
+            renderExplanationError(error.message, state.similarMeta);
+        }
+    }
+
     function renderSimilar(result) {
         const matches = Array.isArray(result.matches) ? result.matches : [];
         const related = result.related && typeof result.related === "object" ? result.related : {};
@@ -448,13 +492,13 @@
         for (const items of Object.values(related)) {
             for (const item of Array.isArray(items) ? items : []) if (!lookup.has(item.id)) lookup.set(item.id, item);
         }
-        const explanation = result.explanation || {};
+        state.similarLookup = lookup;
+        state.similarMeta = formatDate(result.generatedAt, true) + " · 임베딩 " + (result.embeddingModel || "미확인");
 
         const lowRelevance = result.lowRelevance === true;
+        state.similarLowRelevance = lowRelevance;
         elements.similarContent.classList.toggle("is-low", lowRelevance);
-        elements.similarAnswerGrid.hidden = lowRelevance;
         elements.similarPeople.hidden = lowRelevance;
-        elements.similarOverview.textContent = explanation.overview || "설명을 만들지 못했습니다.";
         elements.similarExpanded.hidden = !result.expandedQuery;
         elements.similarExpanded.replaceChildren();
         if (result.expandedQuery) {
@@ -462,15 +506,11 @@
                 createElement("span", "expanded-label", "AI가 넓힌 검색어"),
                 createElement("span", "expanded-text", result.expandedQuery));
         }
-        elements.similarGenerated.textContent = formatDate(result.generatedAt, true)
-            + " · 답변 " + (explanation.generatedBy || "미확인") + " · 임베딩 " + (result.embeddingModel || "미확인");
-
-        renderPointList(elements.similarPoints, elements.similarPointsCount,
-            Array.isArray(explanation.similarWork) ? explanation.similarWork : [], lookup,
-            "관련성이 뚜렷한 과거 업무를 찾지 못했습니다.");
-        renderPointList(elements.similarApproach, elements.similarApproachCount,
-            Array.isArray(explanation.suggestedApproach) ? explanation.suggestedApproach : [], lookup,
-            "과거 업무에서 확인되는 해결 방법이 없습니다.");
+        if (result.explanation) {
+            renderExplanation(result.explanation, lookup, state.similarMeta);
+        } else {
+            renderExplanationPending(state.similarMeta);
+        }
 
         elements.similarMatches.replaceChildren(...matches.map((match) => issueRow(match, related)));
 
@@ -498,10 +538,12 @@
         showSimilarState("loading");
         elements.similarRegion.scrollIntoView({ behavior: "smooth", block: "start" });
         try {
+            // 1단계 검색 결과를 먼저 그리고, 설명은 2단계 요청으로 받아 채운다. 검색창은 그 사이에도 다시 쓸 수 있다.
             const result = await requestJson(API_BASE + "/similar-work", SUMMARY_TIMEOUT_MS, { query });
             if (sequence !== state.similarSequence) return;
             renderSimilar(result);
             elements.similarContent.focus({ preventScroll: true });
+            if (result.explanationPending) loadExplanation(result.query || query, sequence);
         } catch (error) {
             if (sequence !== state.similarSequence) return;
             elements.similarErrorMessage.textContent = error.message;

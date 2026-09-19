@@ -52,7 +52,7 @@ public final class BedrockSimilarWorkExplainer implements SimilarWorkExplainer {
                         .content(ContentBlock.fromText(payload))
                         .build())
                 .inferenceConfig(InferenceConfiguration.builder()
-                        .maxTokens(2000)
+                        .maxTokens(SimilarWorkPrompt.MAX_OUTPUT_TOKENS)
                         .temperature(0.0f)
                         .build())
                 .build();

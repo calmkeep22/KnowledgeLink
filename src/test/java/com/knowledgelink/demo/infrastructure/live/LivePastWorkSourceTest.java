@@ -120,6 +120,26 @@ class LivePastWorkSourceTest {
     }
 
     @Test
+    void 저장본이_기준보다_새로우면_수집하지_않고_오래됐으면_다시_수집한다(@TempDir Path directory) {
+        Path snapshot = directory.resolve("past-work.json");
+        source(fakeHttp(new ArrayList<>(), new AtomicBoolean(false)), snapshot.toString()).findAll();
+
+        List<URI> requested = new ArrayList<>();
+        Clock twoHoursLater = Clock.offset(clock, Duration.ofHours(2));
+        LivePastWorkSource fresh = source(fakeHttp(requested, new AtomicBoolean(false)), snapshot.toString(),
+                Duration.ofHours(12), twoHoursLater);
+        assertEquals(4, fresh.findAll().size());
+        assertEquals("snapshot", fresh.info().sourceType());
+        assertTrue(requested.isEmpty());
+
+        Clock dayLater = Clock.offset(clock, Duration.ofHours(24));
+        LivePastWorkSource stale = source(fakeHttp(requested, new AtomicBoolean(false)), snapshot.toString(),
+                Duration.ofHours(12), dayLater);
+        assertEquals("live", stale.info().sourceType());
+        assertFalse(requested.isEmpty());
+    }
+
+    @Test
     void 수집도_저장본도_없으면_가명_예시_데이터를_쓴다(@TempDir Path directory) {
         LivePastWorkSource offline = source(fakeHttp(new ArrayList<>(), new AtomicBoolean(true)),
                 directory.resolve("missing.json").toString());
@@ -130,9 +150,13 @@ class LivePastWorkSourceTest {
     }
 
     private LivePastWorkSource source(HttpGetter http, String snapshotPath) {
+        return source(http, snapshotPath, Duration.ZERO, clock);
+    }
+
+    private LivePastWorkSource source(HttpGetter http, String snapshotPath, Duration maxAge, Clock clock) {
         LivePastWorkProperties.Apache properties = new LivePastWorkProperties.Apache(
                 URI.create("https://issues.apache.org/jira/"), "KAFKA", "Apache Kafka", "apache/kafka", "",
-                1, 200, List.of("Bug"), snapshotPath, Duration.ofSeconds(5), 800,
+                1, 200, List.of("Bug"), snapshotPath, maxAge, Duration.ofSeconds(5), 800,
                 List.of(new ExampleQuery("메모리 누수", "닫은 뒤에도 메모리가 늘어요")));
         return new LivePastWorkSource(
                 new GitHubPullRequestClient(http, objectMapper, properties.githubRepository(), ""),

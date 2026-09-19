@@ -2,6 +2,7 @@ package com.knowledgelink.demo.api;
 
 import com.knowledgelink.demo.application.SimilarWorkService;
 import com.knowledgelink.demo.domain.PastWorkSourceInfo;
+import com.knowledgelink.demo.domain.SimilarWorkExplanation;
 import com.knowledgelink.demo.domain.SimilarWorkResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,9 +22,16 @@ public class SimilarWorkController {
 
     private final SimilarWorkService similarWorkService;
 
+    /** 1단계: 검색 결과를 먼저 돌려준다. explanationPending이면 설명 API를 이어서 부른다. */
     @PostMapping("/similar-work")
     public SimilarWorkResult search(@Valid @RequestBody SimilarWorkQuery body) {
-        return similarWorkService.search(body.query());
+        return similarWorkService.retrieve(body.query());
+    }
+
+    /** 2단계: 같은 질의의 검색 결과만 근거로 AI 설명을 만든다. 한 번 만든 설명은 캐시한다. */
+    @PostMapping("/similar-work/explanation")
+    public SimilarWorkExplanation explain(@Valid @RequestBody SimilarWorkQuery body) {
+        return similarWorkService.explain(body.query());
     }
 
     @GetMapping("/past-work/info")
